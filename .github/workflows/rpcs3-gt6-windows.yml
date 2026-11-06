@@ -44,6 +44,7 @@ jobs:
       SKIP_RPCS3_TEST: 'true'
     defaults:
       run:
+        shell: bash
         working-directory: rpcs3
     steps:
       - name: Checkout GT6 PC (patches)
