@@ -289,7 +289,21 @@ class Core:
             done.append(fp)
             self.save()
 
+    @staticmethod
+    def vulkan_available() -> bool:
+        """RPCS3 needs the Vulkan loader (vulkan-1.dll / libvulkan.so.1), installed by every GPU driver."""
+        if paths.IS_WINDOWS:
+            root = os.environ.get("SystemRoot", r"C:\Windows")
+            return any(os.path.isfile(os.path.join(root, d, "vulkan-1.dll")) for d in ("System32", "SysWOW64"))
+        import ctypes.util
+        return bool(ctypes.util.find_library("vulkan")) or any(
+            os.path.exists(p) for p in ("/usr/lib/libvulkan.so.1", "/usr/lib64/libvulkan.so.1",
+                                        "/usr/lib/x86_64-linux-gnu/libvulkan.so.1"))
+
     def launch(self, entry: GameEntry) -> subprocess.Popen:
+        if not self.vulkan_available():
+            raise RuntimeError("Vulkan was not found on this PC. Install or update your graphics driver "
+                               "(NVIDIA, AMD or Intel) - it includes Vulkan - then start again.")
         rp = self.rpcs3()
         self.prepare(entry)
         try:

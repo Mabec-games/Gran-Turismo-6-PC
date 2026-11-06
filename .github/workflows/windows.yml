@@ -41,7 +41,14 @@ jobs:
           if ($g.HasExited) { throw "launcher GUI exited early with code $($g.ExitCode)" }
           Stop-Process -Id $g.Id -Force
           Write-Host "ok: launcher GUI stayed up for 20 s"
-          # 3. bundled RPCS3 starts
+          # 3. bundled RPCS3 starts. CI machines have no GPU driver, so provide the official Khronos
+          #    Vulkan loader (normally installed by the user's graphics driver) in the TEST copy only.
+          $vk = Join-Path $env:RUNNER_TEMP "vkrt.zip"
+          Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-runtime-components.zip" -OutFile $vk
+          Expand-Archive $vk -DestinationPath "$env:RUNNER_TEMP\vkrt" -Force
+          $dll = Get-ChildItem -Recurse "$env:RUNNER_TEMP\vkrt" -Filter vulkan-1.dll | Where-Object { $_.FullName -match "x64" } | Select-Object -First 1
+          if (-not $dll) { $dll = Get-ChildItem -Recurse "$env:RUNNER_TEMP\vkrt" -Filter vulkan-1.dll | Select-Object -First 1 }
+          Copy-Item $dll.FullName "$app\rpcs3\"
           $r = Start-Process "$app\rpcs3\rpcs3.exe" -ArgumentList "--version" -Wait -PassThru -NoNewWindow
           Write-Host "rpcs3 --version exit code: $($r.ExitCode)"
           if ($r.ExitCode -ne 0) { throw "bundled rpcs3.exe failed to start" }
