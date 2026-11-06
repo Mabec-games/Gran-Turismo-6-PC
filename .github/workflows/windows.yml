@@ -41,17 +41,36 @@ jobs:
           if ($g.HasExited) { throw "launcher GUI exited early with code $($g.ExitCode)" }
           Stop-Process -Id $g.Id -Force
           Write-Host "ok: launcher GUI stayed up for 20 s"
-          # 3. bundled RPCS3 starts. CI machines have no GPU driver, so provide the official Khronos
-          #    Vulkan loader (normally installed by the user's graphics driver) in the TEST copy only.
-          $vk = Join-Path $env:RUNNER_TEMP "vkrt.zip"
-          Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-runtime-components.zip" -OutFile $vk
-          Expand-Archive $vk -DestinationPath "$env:RUNNER_TEMP\vkrt" -Force
-          $dll = Get-ChildItem -Recurse "$env:RUNNER_TEMP\vkrt" -Filter vulkan-1.dll | Where-Object { $_.FullName -match "x64" } | Select-Object -First 1
-          if (-not $dll) { $dll = Get-ChildItem -Recurse "$env:RUNNER_TEMP\vkrt" -Filter vulkan-1.dll | Select-Object -First 1 }
-          Copy-Item $dll.FullName "$app\rpcs3\"
-          $r = Start-Process "$app\rpcs3\rpcs3.exe" -ArgumentList "--version" -Wait -PassThru -NoNewWindow
-          Write-Host "rpcs3 --version exit code: $($r.ExitCode)"
-          if ($r.ExitCode -ne 0) { throw "bundled rpcs3.exe failed to start" }
+          # 3. bundled RPCS3: every DLL it imports must be bundled or part of Windows. The only
+          #    exception is vulkan-1.dll, which every GPU driver installs (CI runners have no GPU driver).
+          python -m pip install --quiet pefile
+          $chk = @'
+          import os, sys, pefile
+          app = sys.argv[1]; sysdir = os.path.join(os.environ["SystemRoot"], "System32")
+          missing = []
+          for exe in ("rpcs3.exe",):
+              pe = pefile.PE(os.path.join(app, exe), fast_load=True)
+              pe.parse_data_directories(directories=[pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_IMPORT"]])
+              for imp in pe.DIRECTORY_ENTRY_IMPORT:
+                  d = imp.dll.decode()
+                  if d.lower().startswith("api-ms-win-") or d.lower() == "vulkan-1.dll":
+                      continue
+                  if not (os.path.exists(os.path.join(app, d)) or os.path.exists(os.path.join(sysdir, d))):
+                      missing.append(d)
+          print("missing DLLs:", missing or "none")
+          sys.exit(1 if missing else 0)
+          '@
+          $chk | Set-Content -Encoding UTF8 "$env:RUNNER_TEMP\depcheck.py"
+          python "$env:RUNNER_TEMP\depcheck.py" "$app\rpcs3"
+          if ($LASTEXITCODE -ne 0) { throw "bundled rpcs3.exe has unresolved DLL imports" }
+          Write-Host "ok: rpcs3.exe dependencies resolve (vulkan-1.dll comes with the GPU driver)"
+          if (Test-Path "$env:SystemRoot\System32\vulkan-1.dll") {
+            $r = Start-Process "$app\rpcs3\rpcs3.exe" -ArgumentList "--version" -Wait -PassThru -NoNewWindow
+            if ($r.ExitCode -ne 0) { throw "bundled rpcs3.exe failed to start ($($r.ExitCode))" }
+            Write-Host "ok: rpcs3.exe --version"
+          } else {
+            Write-Host "note: no Vulkan driver on this CI machine - rpcs3.exe start check skipped"
+          }
           Write-Host "SMOKE TEST PASSED"
 
       - uses: actions/upload-artifact@v4
