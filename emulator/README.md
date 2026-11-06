@@ -26,6 +26,10 @@ emulator/scripts/build_rpcs3.sh       # -> emulator/out/rpcs3-gt6-x86_64.AppImag
 The script expects clang, Ninja, Qt 6, LLVM and Vulkan headers, plus `linuxdeploy` / `appimagetool`
 in `emulator/tools/`. It applies the patches to a clean tree at the pinned commit.
 
+**Windows:** [`.github/workflows/rpcs3-gt6-windows.yml`](../.github/workflows/rpcs3-gt6-windows.yml) checks out
+upstream RPCS3 at the pinned commit, applies these patches and runs RPCS3's own MSVC CI steps. The
+launcher's Windows package bundles the result and marks it with `GT6-PATCHED.txt`.
+
 `ci/make_gt6_branch.sh` creates a `gt6` branch (upstream + patches) that RPCS3's own CI can build
 for Windows and Linux on a fork.
 
