@@ -63,7 +63,7 @@ On top of that comes a **patched emulator build** (below) that changes RPCS3 its
 | | |
 |---|---|
 | **One download, nothing to configure** | The GT6-patched emulator is built in. The launcher installs the PS3 firmware, finds your disc image and installs the official update chain (1.02 → 1.22, ~10.5 GB) in the right order, with resumable, checksum-verified downloads. |
-| **GT6-patched emulator** | Fixes the ~1 s race freezes, stale-band rendering, the intro-skip crash and save-state issues, and stops memory-lock retry spam (see [emulator/](emulator/)). |
+| **GT6-patched emulator** | Fixes the ~1 s race freezes, stale-band rendering, the intro-skip crash and save-state issues, and stops memory-lock retry spam (see [emulator/](emulator/)). *v1.0: Linux. Windows ships the stock RPCS3 0.0.43 for now; the patched Windows build is next.* |
 | **Version-aware tuning** | 1.06+ gets color buffers; 1.05 gets the faster CPU-blit path, as the RPCS3 wiki recommends, never both. Occlusion and threading settings are set to what GT6 needs. |
 | **Modern graphics** | 100–300 % internal resolution (sharp at 1440p/4K), ultrawide **21:9 / 32:9** and **16:10**, *Sharper MLAA* or no post-AA, **AMD FSR 1 + CAS**, 16× anisotropic filtering, sharper shadows, extended FOV, optional in-game motion blur, depth of field toggle, lamp-glare control. |
 | **Resolution-scale fixes always on** | Bloom, auto exposure and smoke render correctly at every resolution, including when it changes while you play. |
@@ -124,7 +124,8 @@ Get **v1.0** from [Releases](../../releases):
 
 Tested: EU 1.22 on Linux (Ryzen 9 6900HS, RTX 3080 Laptop): full update install, first boot,
 races with 6 cars at 60 FPS, mod install/uninstall, gamepad, LAN code verification.
-The Windows build is produced and smoke-tested on GitHub Actions.
+The Windows build is produced and smoke-tested on GitHub Actions; it bundles the **stock** RPCS3
+0.0.43 (the GT6 patches are Linux-only in v1.0, so the ~1 s race freezes still happen on Windows).
 Not yet tested on hardware: racing wheels, two-PC LAN, online, Steam Deck, the Windows version in play.
 Reports are welcome. Attach the log from *Advanced → Open emulator log*.
 
