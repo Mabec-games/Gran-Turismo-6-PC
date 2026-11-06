@@ -1,0 +1,75 @@
+diff --git a/rpcs3/Emu/Cell/lv2/sys_rsx.cpp b/rpcs3/Emu/Cell/lv2/sys_rsx.cpp
+index 2573dcdbf..7b278d6fb 100644
+--- a/rpcs3/Emu/Cell/lv2/sys_rsx.cpp
++++ b/rpcs3/Emu/Cell/lv2/sys_rsx.cpp
+@@ -12,6 +12,7 @@
+ #include "Emu/RSX/Overlays/overlay_cursor.h"
+ #include "Emu/RSX/Overlays/overlay_manager.h"
+ #include "Emu/RSX/RSXThread.h"
++#include "Emu/RSX/rsx_methods.h"
+ #include "util/asm.hpp"
+ #include "sys_event.h"
+ #include "sys_vm.h"
+@@ -1218,7 +1219,13 @@ error_code sys_rsx_context_attribute(u32 context_id, u32 package_id, u64 a3, u64
+ 		}
+ 
+ 		const auto intr_cause = static_cast<u32>(a4);
+-		if (intr_cause != driverInfo.userCmdParam)
++		if (rsx::usercmd_legacy_mode())
++		{
++			// GT6 build: pre-#19549 behaviour. Draining here blocks the RSX thread until a guest thread waits on the
++			// queue; Gran Turismo 6's handler is often busy, so every drain ran into the 1 s timeout (race freezes).
++			driverInfo.userCmdParam = intr_cause;
++		}
++		else if (intr_cause != driverInfo.userCmdParam)
+ 		{
+ 			// Drain the event queue to make sure any previous callbacks have fired.
+ 			// The userCmdParam object is shared and we do not want to clobber it.
+diff --git a/rpcs3/Emu/RSX/rsx_methods.cpp b/rpcs3/Emu/RSX/rsx_methods.cpp
+index c0a9643f4..4e5e5c357 100644
+--- a/rpcs3/Emu/RSX/rsx_methods.cpp
++++ b/rpcs3/Emu/RSX/rsx_methods.cpp
+@@ -12,6 +12,17 @@
+ 
+ namespace rsx
+ {
++	// GT6 build: RPCS3_USERCMD_MODE=upstream restores the upstream USER_COMMAND stall/drain, anything else = legacy.
++	bool usercmd_legacy_mode()
++	{
++		static const bool legacy = []
++		{
++			const char* v = ::getenv("RPCS3_USERCMD_MODE");
++			return !(v && std::string_view(v) == "upstream");
++		}();
++		return legacy;
++	}
++
+ 	std::array<rsx_method_t, 0x10000 / 4> methods{};
+ 	std::array<u32, 0x10000 / 4> state_signals{};
+ 	std::array<u8, 0x10000 / 4> draw_state_signals{};
+@@ -64,7 +75,10 @@ namespace rsx
+ 	void user_command(context* ctx, u32, u32 arg)
+ 	{
+ 		// USER_COMMAND induces a full drain of the backend and frontend.
+-		RSX(ctx)->sync();
++		if (!usercmd_legacy_mode())
++		{
++			RSX(ctx)->sync();
++		}
+ 
+ 		if (!RSX(ctx)->isHLE)
+ 		{
+diff --git a/rpcs3/Emu/RSX/rsx_methods.h b/rpcs3/Emu/RSX/rsx_methods.h
+index 2ecfd4309..2442014d2 100644
+--- a/rpcs3/Emu/RSX/rsx_methods.h
++++ b/rpcs3/Emu/RSX/rsx_methods.h
+@@ -13,6 +13,9 @@
+ 
+ namespace rsx
+ {
++	// GT6 build: true unless RPCS3_USERCMD_MODE=upstream (see rsx_methods.cpp)
++	bool usercmd_legacy_mode();
++
+ 	using rsx_method_t = void(*)(struct context*, u32 reg, u32 arg);
+ 
+ 	//TODO

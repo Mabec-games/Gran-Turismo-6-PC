@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+dist/
+build-appimage/
+build-win/
+*.AppImage
+*.iso
+*.pkg
+*.PUP

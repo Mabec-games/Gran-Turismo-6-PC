@@ -1,0 +1,38 @@
+diff --git a/rpcs3/Emu/Cell/Modules/cellVdec.cpp b/rpcs3/Emu/Cell/Modules/cellVdec.cpp
+index d6471ab00..71a0d44ba 100644
+--- a/rpcs3/Emu/Cell/Modules/cellVdec.cpp
++++ b/rpcs3/Emu/Cell/Modules/cellVdec.cpp
+@@ -682,6 +682,13 @@ struct vdec_context final
+ 
+ 						{
+ 							std::lock_guard lock{mutex};
++
++							// A new sequence may have started while we waited: do not announce stale frames
++							if (abort_decode || seq_id != cmd->seq_id)
++							{
++								break;
++							}
++
+ 							out_queue.push_back(std::move(decoded_frames.front()));
+ 							decoded_frames.pop_front();
+ 						}
+@@ -2061,11 +2068,18 @@ error_code cellVdecGetPicItem(ppu_thread& ppu, u32 handle, vm::pptr<CellVdecPicI
+ 		}
+ 	}
+ 
+-	if (!info || seq_id != sequence_id)
++	if (!info)
+ 	{
+ 		return { CELL_VDEC_ERROR_EMPTY, " info=%d, sequence_id=%d, seq_id=%d", !!info, sequence_id, seq_id };
+ 	}
+ 
++	if (seq_id != sequence_id)
++	{
++		// The game was already sent PICOUT for this picture (a sequence restart raced the decoder).
++		// Games such as Gran Turismo 6 read the item without checking the error, so hand it out.
++		cellVdec.warning("cellVdecGetPicItem: returning picture of previous sequence (sequence_id=%d, seq_id=%d)", sequence_id, seq_id);
++	}
++
+ 	info->codecType = vdec->type;
+ 	info->startAddr = 0x00000123; // invalid value (no address for picture)
+ 	const int buffer_size = av_image_get_buffer_size(vdec->ctx->pix_fmt, vdec->ctx->width, vdec->ctx->height, 1);

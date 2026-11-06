@@ -1,0 +1,17 @@
+diff --git a/rpcs3/Emu/RSX/Common/texture_cache.h b/rpcs3/Emu/RSX/Common/texture_cache.h
+index 942bb7e..f2ce437 100644
+--- a/rpcs3/Emu/RSX/Common/texture_cache.h
++++ b/rpcs3/Emu/RSX/Common/texture_cache.h
+@@ -3768,6 +3768,12 @@ namespace rsx
+ 						dest_section->reprotect(utils::protection::no);
+ 					}
+ 				}
++				else
++				{
++					// The blit rewrites this locked section: drop any (speculative) copy taken before it, or a later
++					// flush hands the CPU/SPU stale data (GT6: world copied to XDR in two blits, SPUs read last frame's)
++					dest_section->reprotect(utils::protection::no);
++				}
+ 
+ 				// MM flush before commit below. For performance reasons, only flush when writing to CELL memory.
+ 				if (rsx::classify_location(dst.rsx_address) == CELL_GCM_LOCATION_MAIN)

@@ -1,0 +1,71 @@
+diff --git a/rpcs3/Emu/System.cpp b/rpcs3/Emu/System.cpp
+index 965903a43..74cc7dae0 100644
+--- a/rpcs3/Emu/System.cpp
++++ b/rpcs3/Emu/System.cpp
+@@ -4221,7 +4221,7 @@ void Emulator::Kill(bool allow_autoexit, bool savestate, savestate_stage* save_s
+ 		set_progress_message("Resetting Objects");
+ 
+ 		// Final termination from main thread (move the last ownership of join thread in order to destroy it)
+-		CallFromMainThread([join_thread = std::move(join_thread), reset_emu_state, verbose_message, stop_watchdog, init_mtx, allow_autoexit, return_to_big_picture_mode, this]()
++		CallFromMainThread([join_thread = std::move(join_thread), reset_emu_state, verbose_message, stop_watchdog, init_mtx, allow_autoexit, return_to_big_picture_mode, savestate, this]()
+ 		{
+ 			cpu_thread::cleanup();
+ 
+@@ -4267,8 +4267,24 @@ void Emulator::Kill(bool allow_autoexit, bool savestate, savestate_stage* save_s
+ 			m_stop_ctr.notify_all();
+ 
+ 			// Boot arg cleanup (preserved in the case restarting)
++			// Savestate-and-continue reboots via Restart() from after_kill_callback, i.e. after this cleanup,
++			// so keep the config choice (e.g. a --config override) or the reboot silently switches config.
++			auto kept_config = std::make_pair(m_config_mode, m_config_path);
+ 			reset_emu_state();
+ 
++			if (savestate && m_continuous_mode)
++			{
++				std::tie(m_config_mode, m_config_path) = std::move(kept_config);
++
++				// After an exitspawn (GT6: EBOOT -> EMAIN.SELF) the mode is "continuous", whose Load() skips the
++				// savestate reader and the reboot fails ("Invalid or unsupported file format"). Its path is the
++				// config that was in use, so reboot with it as an override.
++				if (m_config_mode == cfg_mode::continuous)
++				{
++					m_config_mode = m_config_path.empty() ? cfg_mode::custom : cfg_mode::config_override;
++				}
++			}
++
+ 			if (!m_continuous_mode)
+ 			{
+ 				unload_iso();
+diff --git a/rpcs3/rpcs3.cpp b/rpcs3/rpcs3.cpp
+index 78154f639..b51b28ca0 100644
+--- a/rpcs3/rpcs3.cpp
++++ b/rpcs3/rpcs3.cpp
+@@ -1210,11 +1210,26 @@ int run_rpcs3(int argc, char** argv)
+ 			report_fatal_error(fmt::format("No savestate file found or savestate not compatible: path='%s'", savestate_path));
+ 		}
+ 
+-		Emu.CallFromMainThread([path = savestate_path]()
++		// Honour --config for savestates too (otherwise the custom/global config silently applies)
++		std::string config_path;
++
++		if (parser.isSet(arg_config))
++		{
++			config_path = parser.value(config_option).toStdString();
++
++			if (!fs::is_file(config_path))
++			{
++				report_fatal_error(fmt::format("No config file found: %s", config_path));
++			}
++		}
++
++		Emu.CallFromMainThread([path = savestate_path, config_path = std::move(config_path)]()
+ 		{
+ 			Emu.SetForceBoot(true);
+ 
+-			if (const game_boot_result error = Emu.BootGame(path); error != game_boot_result::no_errors)
++			const cfg_mode config_mode = config_path.empty() ? cfg_mode::custom : cfg_mode::config_override;
++
++			if (const game_boot_result error = Emu.BootGame(path, "", false, config_mode, config_path); error != game_boot_result::no_errors)
+ 			{
+ 				sys_log.error("Booting savestate '%s' failed: reason: %s", path, error);
+ 

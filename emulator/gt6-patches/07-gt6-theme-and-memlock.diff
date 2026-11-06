@@ -1,0 +1,111 @@
+diff --git a/rpcs3/Emu/Memory/vm.cpp b/rpcs3/Emu/Memory/vm.cpp
+index ae7e3dd70..edcf9cbb9 100644
+--- a/rpcs3/Emu/Memory/vm.cpp
++++ b/rpcs3/Emu/Memory/vm.cpp
+@@ -1174,9 +1174,20 @@ namespace vm
+ 		ensure(addr % 4096 == 0);
+ 		ensure(size % 4096 == 0);
+ 
++		// GT6 build: once locking failed (RLIMIT_MEMLOCK too small, no root to change it),
++		// stop retrying - every attempt is a failing syscall plus an error log line on a game
++		// thread (~1900 times in GT6's first two minutes). Memory works fine unlocked.
++		static atomic_t<bool> s_lock_unavailable = false;
++
++		if (s_lock_unavailable)
++		{
++			return;
++		}
++
+ 		if (!utils::memory_lock(g_sudo_addr + addr, size))
+ 		{
+-			vm_log.error("Failed to lock sudo memory (addr=0x%x, size=0x%x). Consider increasing your system limits.", addr, size);
++			s_lock_unavailable = true;
++			vm_log.warning("Memory locking unavailable (system limit); continuing without it (addr=0x%x, size=0x%x).", addr, size);
+ 		}
+ 	}
+ 
+diff --git a/rpcs3/Emu/RSX/Overlays/HomeMenu/overlay_home_menu.cpp b/rpcs3/Emu/RSX/Overlays/HomeMenu/overlay_home_menu.cpp
+index 0a9e45ace..c8ecbc6aa 100644
+--- a/rpcs3/Emu/RSX/Overlays/HomeMenu/overlay_home_menu.cpp
++++ b/rpcs3/Emu/RSX/Overlays/HomeMenu/overlay_home_menu.cpp
+@@ -22,7 +22,7 @@ namespace rsx
+ 			m_allow_input_on_pause = true;
+ 
+ 			m_dim_background.set_size(virtual_width, virtual_height);
+-			m_dim_background.back_color.a = 0.85f;
++			m_dim_background.back_color = {0.027f, 0.027f, 0.039f, 0.90f};
+ 
+ 			m_description.set_font(20);
+ 			m_description.set_pos(20, 37);
+diff --git a/rpcs3/Emu/RSX/Overlays/HomeMenu/overlay_home_menu_message_box.cpp b/rpcs3/Emu/RSX/Overlays/HomeMenu/overlay_home_menu_message_box.cpp
+index 5a3675176..ed6524c48 100644
+--- a/rpcs3/Emu/RSX/Overlays/HomeMenu/overlay_home_menu_message_box.cpp
++++ b/rpcs3/Emu/RSX/Overlays/HomeMenu/overlay_home_menu_message_box.cpp
+@@ -10,7 +10,7 @@ namespace rsx
+ 			, m_accept_btn(120, 30)
+ 			, m_cancel_btn(120, 30)
+ 		{
+-			back_color = {0.15f, 0.15f, 0.15f, 0.95f};
++			back_color = {0.043f, 0.043f, 0.063f, 0.97f};
+ 
+ 			set_size(width, height);
+ 			set_pos(x, y);
+diff --git a/rpcs3/Emu/RSX/Overlays/HomeMenu/overlay_home_menu_settings.cpp b/rpcs3/Emu/RSX/Overlays/HomeMenu/overlay_home_menu_settings.cpp
+index cec2c7932..a9ff8183c 100644
+--- a/rpcs3/Emu/RSX/Overlays/HomeMenu/overlay_home_menu_settings.cpp
++++ b/rpcs3/Emu/RSX/Overlays/HomeMenu/overlay_home_menu_settings.cpp
+@@ -11,7 +11,7 @@ namespace rsx
+ 		{
+ 			m_tabs = std::make_unique<tabbed_container>(width, height, 300);
+ 			m_tabs->set_pos(x, y);
+-			m_tabs->set_headers_background_color({ 0.25f, 0.25f, 0.25f, 0.95f });
++			m_tabs->set_headers_background_color({ 0.082f, 0.082f, 0.106f, 0.95f });
+ 
+ 			add_page(home_menu::fa_icon::audio, std::make_shared<home_menu_settings_audio>(x, y, width, height, use_separators, nullptr));
+ 			add_page(home_menu::fa_icon::video, std::make_shared<home_menu_settings_video>(x, y, width, height, use_separators, nullptr));
+diff --git a/rpcs3/Emu/RSX/Overlays/HomeMenu/overlay_home_menu_sidebar_page.cpp b/rpcs3/Emu/RSX/Overlays/HomeMenu/overlay_home_menu_sidebar_page.cpp
+index 41569b3bf..faf5a9075 100644
+--- a/rpcs3/Emu/RSX/Overlays/HomeMenu/overlay_home_menu_sidebar_page.cpp
++++ b/rpcs3/Emu/RSX/Overlays/HomeMenu/overlay_home_menu_sidebar_page.cpp
+@@ -11,7 +11,7 @@ namespace rsx
+ 			m_sidebar = std::make_unique<list_view>(350, overlay::virtual_height, false);
+ 			m_sidebar->set_pos(0, 0);
+ 			m_sidebar->hide_prompt_buttons();
+-			m_sidebar->back_color = color4f(0.05f, 0.05f, 0.05f, 0.95f);
++			m_sidebar->back_color = color4f(0.027f, 0.027f, 0.039f, 0.96f);
+ 
+ 			m_sliding_animation.duration_sec = 0.5f;
+ 			m_sliding_animation.type = animation_type::ease_in_out_cubic;
+diff --git a/rpcs3/Emu/RSX/Overlays/overlay_list_view.cpp b/rpcs3/Emu/RSX/Overlays/overlay_list_view.cpp
+index d7daacd07..9ca9fddc1 100644
+--- a/rpcs3/Emu/RSX/Overlays/overlay_list_view.cpp
++++ b/rpcs3/Emu/RSX/Overlays/overlay_list_view.cpp
+@@ -59,9 +59,9 @@ namespace rsx
+ 			m_cancel_btn->set_font(16);
+ 
+ 			auto_resize = false;
+-			back_color  = {0.15f, 0.15f, 0.15f, 0.8f};
++			back_color  = {0.043f, 0.043f, 0.063f, 0.92f};
+ 
+-			m_highlight_box->back_color             = {.5f, .5f, .8f, 0.2f};
++			m_highlight_box->back_color             = {0.878f, 0.082f, 0.478f, 0.45f};
+ 			m_highlight_box->pulse_effect_enabled   = true;
+ 		}
+ 
+diff --git a/rpcs3/rpcs3qt/gui_application.cpp b/rpcs3/rpcs3qt/gui_application.cpp
+index bbd25e3c3..899c4e3ef 100644
+--- a/rpcs3/rpcs3qt/gui_application.cpp
++++ b/rpcs3/rpcs3qt/gui_application.cpp
+@@ -274,7 +274,11 @@ int gui_application::exec()
+ void gui_application::Init()
+ {
+ #ifndef __APPLE__
+-	setWindowIcon(QIcon(":/rpcs3.ico"));
++	// GT6 build: the launcher can brand RPCS3's windows/dialogs with its own icon
++	if (const char* icon = ::getenv("GT6_WINDOW_ICON"); icon && QFileInfo::exists(QString::fromUtf8(icon)))
++		setWindowIcon(QIcon(QString::fromUtf8(icon)));
++	else
++		setWindowIcon(QIcon(":/rpcs3.ico"));
+ #endif
+ 
+ 	m_emu_settings = std::make_shared<emu_settings>(m_render_creator);

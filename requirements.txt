@@ -1,0 +1,5 @@
+PySide6-Essentials>=6.8
+pyyaml>=6
+pyinstaller>=6
+pillow>=10   # Windows icon conversion
+python-xlib; sys_platform == "linux"   # emulator/scripts benchmark tool only

@@ -1,0 +1,120 @@
+diff --git a/rpcs3/Emu/Cell/Modules/cellNetCtl.cpp b/rpcs3/Emu/Cell/Modules/cellNetCtl.cpp
+index 31e460d..4b21b22 100644
+--- a/rpcs3/Emu/Cell/Modules/cellNetCtl.cpp
++++ b/rpcs3/Emu/Cell/Modules/cellNetCtl.cpp
+@@ -288,6 +288,10 @@ error_code cellNetCtlGetInfo(s32 code, vm::ptr<CellNetCtlInfo> info)
+ 	return CELL_OK;
+ }
+ 
++// Set while the hack below has not sent its events yet: a savestate taken then would lose them (and the wait is cut
++// short by the savestate's stop, queueing the callbacks mid-save), see check_if_sysutil_callbacks_pending()
++atomic_t<bool> g_netstart_pending{};
++
+ struct netstart_hack
+ {
+ 	static constexpr std::string_view thread_name = "NetStart Hack";
+@@ -298,6 +302,8 @@ struct netstart_hack
+ 
+ 		sysutil_send_system_cmd(CELL_SYSUTIL_NET_CTL_NETSTART_LOADED, 0);
+ 		sysutil_send_system_cmd(CELL_SYSUTIL_NET_CTL_NETSTART_FINISHED, 0);
++
++		g_netstart_pending = false;
+ 	}
+ };
+ 
+@@ -328,6 +334,7 @@ error_code cellNetCtlNetStartDialogLoadAsync(vm::cptr<CellNetCtlNetStartDialogPa
+ 	}
+ 
+ 	// This is a hack for Diva F 2nd that registers the sysutil callback after calling this function.
++	g_netstart_pending = true;
+ 	g_fxo->get<named_thread<netstart_hack>>()(0);
+ 
+ 	return CELL_OK;
+diff --git a/rpcs3/Emu/Cell/Modules/cellSysutil.cpp b/rpcs3/Emu/Cell/Modules/cellSysutil.cpp
+index cd7aeb4..a7b0d5b 100644
+--- a/rpcs3/Emu/Cell/Modules/cellSysutil.cpp
++++ b/rpcs3/Emu/Cell/Modules/cellSysutil.cpp
+@@ -229,6 +229,17 @@ struct sysutil_cb_manager
+ 	}
+ };
+ 
++extern atomic_t<bool> g_netstart_pending;
++
++extern bool check_if_sysutil_callbacks_pending()
++{
++	// Registered but not yet dispatched callbacks are not serialized (sysutil_cb_manager::save)
++	// ponytail: a PPU HLE call can still queue one in the few ms before it pauses (GT6 trophy setup ~8-10 s after
++	// boot) and hit that ensure; closing it needs serializable callbacks or blocking registration while saving.
++	const auto cbm = g_fxo->try_get<sysutil_cb_manager>();
++	return g_netstart_pending || (cbm && static_cast<bool>(cbm->registered));
++}
++
+ void sysutil_register_cb_with_id_internal(std::function<s32(ppu_thread&)>&& cb, usz call_id)
+ {
+ 	auto& cbm = *ensure(g_fxo->try_get<sysutil_cb_manager>());
+diff --git a/rpcs3/Emu/System.cpp b/rpcs3/Emu/System.cpp
+index 74cc7da..10ed865 100644
+--- a/rpcs3/Emu/System.cpp
++++ b/rpcs3/Emu/System.cpp
+@@ -3469,6 +3469,7 @@ void Emulator::GracefulShutdown(bool allow_autoexit, bool async_op, bool savesta
+ }
+ 
+ extern bool check_if_vdec_contexts_exist();
++extern bool check_if_sysutil_callbacks_pending();
+ extern bool try_lock_spu_threads_in_a_state_compatible_with_savestates(bool revert_lock = false, std::vector<std::pair<shared_ptr<named_thread<spu_thread>>, u32>>* out_list = nullptr);
+ 
+ void Emulator::Kill(bool allow_autoexit, bool savestate, savestate_stage* save_stage)
+@@ -3540,18 +3541,27 @@ void Emulator::Kill(bool allow_autoexit, bool savestate, savestate_stage* save_s
+ 
+ 				bool savedata_error = false;
+ 				bool vdec_error = false;
++				bool sysutil_error = false;
+ 
+ 				if (!g_fxo->get<hle_locks_t>().try_finalize([&]()
+ 				{
+ 					// List of conditions required for emulation to save properly
+ 					vdec_error = check_if_vdec_contexts_exist();
+-					return !vdec_error;
++					sysutil_error = !vdec_error && check_if_sysutil_callbacks_pending();
++					return !vdec_error && !sysutil_error;
+ 				}))
+ 				{
+ 					// Unlock SPUs
+ 					try_lock_spu_threads_in_a_state_compatible_with_savestates(true);
+ 
+-					savedata_error = !vdec_error; // For now it is implied a savedata error
++					savedata_error = !vdec_error && !sysutil_error; // For now it is implied a savedata error
++
++					if (sysutil_error)
++					{
++						// Saving now would hit ensure(!registered) in sysutil_cb_manager::save and kill the game
++						rsx::overlays::queue_message(localized_string_id::SAVESTATE_FAILED_DUE_TO_SYSUTIL);
++						sys_log.error("Failed to savestate: a system callback is pending (e.g. during loading movies). Retry in a moment.");
++					}
+ 
+ 					if (vdec_error)
+ 					{
+diff --git a/rpcs3/Emu/localized_string_id.h b/rpcs3/Emu/localized_string_id.h
+index bd72944..2a6ecc8 100644
+--- a/rpcs3/Emu/localized_string_id.h
++++ b/rpcs3/Emu/localized_string_id.h
+@@ -351,6 +351,7 @@ enum class localized_string_id
+ 
+ 	SAVESTATE_FAILED_DUE_TO_VDEC,
+ 	SAVESTATE_FAILED_DUE_TO_SAVEDATA,
++	SAVESTATE_FAILED_DUE_TO_SYSUTIL,
+ 	SAVESTATE_FAILED_DUE_TO_SPU,
+ 	SAVESTATE_FAILED_DUE_TO_MISSING_SPU_SETTING,
+ 
+diff --git a/rpcs3/rpcs3qt/localized_emu.h b/rpcs3/rpcs3qt/localized_emu.h
+index e1dd613..28814ca 100644
+--- a/rpcs3/rpcs3qt/localized_emu.h
++++ b/rpcs3/rpcs3qt/localized_emu.h
+@@ -366,6 +366,7 @@ private:
+ 		case localized_string_id::EMULATION_RESUMING: return tr("Resuming...!");
+ 		case localized_string_id::EMULATION_FROZEN: return tr("The PS3 application has likely crashed, you can close it.");
+ 		case localized_string_id::SAVESTATE_FAILED_DUE_TO_SAVEDATA: return tr("SaveState failed: Game saving is in progress, wait until finished.");
++		case localized_string_id::SAVESTATE_FAILED_DUE_TO_SYSUTIL: return tr("SaveState failed: A system event is pending, retry in a moment.");
+ 		case localized_string_id::SAVESTATE_FAILED_DUE_TO_VDEC: return tr("SaveState failed: VDEC-based video/cutscenes are in order, wait for them to end or enable libvdec.sprx.");
+ 		case localized_string_id::SAVESTATE_FAILED_DUE_TO_MISSING_SPU_SETTING: return tr("SaveState failed: Failed to lock SPU state, enabling SPU-Compatible mode may fix it.");
+ 		case localized_string_id::SAVESTATE_FAILED_DUE_TO_SPU: return tr("SaveState failed: Failed to lock SPU state, using SPU ASMJIT will fix it.");

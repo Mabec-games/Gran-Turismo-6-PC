@@ -1,0 +1,44 @@
+/* GT6 Launcher theme for RPCS3's own Qt windows/dialogs (exit confirmation, pad settings, ...).
+   Passed with --stylesheet on every boot and installed as GuiConfigs/GT6 Launcher.qss. */
+QWidget { background-color: #0b0b10; color: #e9e9ee; font-size: 10pt; selection-background-color: #e0157a; selection-color: #ffffff; }
+QDialog, QMessageBox, QMainWindow { background-color: #0b0b10; border: 1px solid #2a2a33; }
+QMessageBox QLabel { color: #e9e9ee; font-size: 11pt; padding: 6px 4px; background: transparent; }
+QLabel { background: transparent; }
+QPushButton { background-color: #1c1c24; border: 1px solid #34343f; border-radius: 6px; padding: 7px 18px; min-width: 70px; color: #e9e9ee; }
+QPushButton:hover { background-color: #2a2a35; }
+QPushButton:pressed { background-color: #e0157a; }
+QPushButton:default, QPushButton:focus { background-color: #e0157a; border: none; color: #ffffff; font-weight: bold; }
+QPushButton:default:hover, QPushButton:focus:hover { background-color: #ff3d97; }
+QPushButton:disabled { color: #66666f; background-color: #141419; }
+QCheckBox { background: transparent; }
+QCheckBox::indicator { width: 16px; height: 16px; border-radius: 4px; border: 1px solid #77778a; background: #000000; }
+QCheckBox::indicator:checked { background: #e0157a; border-color: #e0157a; }
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QPlainTextEdit, QTextEdit, QListWidget, QTreeWidget, QTableWidget {
+    background-color: #050507; border: 1px solid #34343f; border-radius: 5px; padding: 3px 6px; color: #e9e9ee; }
+QComboBox QAbstractItemView { background-color: #15151b; selection-background-color: #e0157a; }
+QTabWidget::pane { border: 1px solid #2a2a33; border-radius: 6px; }
+QTabBar::tab { background: transparent; padding: 8px 14px; color: #9a9aa6; border: none; font-weight: bold; }
+QTabBar::tab:selected { color: #ffffff; border-bottom: 2px solid #e0157a; }
+QGroupBox { border: 1px solid #2a2a33; border-radius: 8px; margin-top: 14px; padding: 10px; }
+QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; color: #c9c9d4; font-weight: bold; }
+QMenuBar, QMenu { background-color: #0b0b10; color: #e9e9ee; }
+QMenu::item:selected, QMenuBar::item:selected { background-color: #e0157a; }
+QHeaderView::section { background-color: #15151b; color: #c9c9d4; border: none; padding: 4px; }
+QProgressBar { background: #050507; border: none; border-radius: 4px; text-align: center; }
+QProgressBar::chunk { background: #e0157a; border-radius: 4px; }
+QSlider::groove:horizontal { height: 4px; background: #2a2a33; border-radius: 2px; }
+QSlider::handle:horizontal { width: 14px; margin: -6px 0; border-radius: 7px; background: #e0157a; }
+QScrollBar:vertical { background: #0b0b10; width: 10px; }
+QScrollBar::handle:vertical { background: #34343f; border-radius: 5px; min-height: 24px; }
+QToolTip { background-color: #15151b; color: #ffffff; border: 1px solid #333333; }
+/* launcher-style dialog icons (@IMG@ is replaced with the absolute image folder at runtime) */
+QWidget {
+    messagebox-question-icon: url("@IMG@/dlg_question.png");
+    messagebox-information-icon: url("@IMG@/dlg_info.png");
+    messagebox-warning-icon: url("@IMG@/dlg_warning.png");
+    messagebox-critical-icon: url("@IMG@/dlg_critical.png");
+    dialog-yes-icon: url("@IMG@/dlg_yes.png");
+    dialog-ok-icon: url("@IMG@/dlg_yes.png");
+    dialog-no-icon: url("@IMG@/dlg_no.png");
+    dialog-cancel-icon: url("@IMG@/dlg_no.png");
+}

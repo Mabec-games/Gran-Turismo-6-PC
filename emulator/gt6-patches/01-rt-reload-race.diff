@@ -1,0 +1,135 @@
+diff --git a/rpcs3/Emu/RSX/Common/surface_store.h b/rpcs3/Emu/RSX/Common/surface_store.h
+index c2685c9e3..415cf1534 100644
+--- a/rpcs3/Emu/RSX/Common/surface_store.h
++++ b/rpcs3/Emu/RSX/Common/surface_store.h
+@@ -1524,7 +1524,7 @@ namespace rsx
+ 					}
+ 					else
+ 					{
+-						surface->on_write(write_tag, rsx::surface_state_flags::require_resolve, m_active_raster_type);
++						surface->on_write(write_tag, rsx::surface_state_flags::require_resolve, m_active_raster_type, true);
+ 					}
+ 				}
+ 			}
+diff --git a/rpcs3/Emu/RSX/Common/surface_utils.h b/rpcs3/Emu/RSX/Common/surface_utils.h
+index 618711ffb..2f2dedebe 100644
+--- a/rpcs3/Emu/RSX/Common/surface_utils.h
++++ b/rpcs3/Emu/RSX/Common/surface_utils.h
+@@ -134,11 +134,13 @@ namespace rsx
+ 		rsx::context* ctx = nullptr; // Context owning the surface cache this surface belongs to
+ 		u64 last_use_tag = 0;         // tag indicating when this block was last confirmed to have been written to
+ 		u32 base_addr = 0;
++		bool memory_tag_synced = false; // tag taken since queue_tag (only the sampled variant sets it)
+ 
+ #if (ENABLE_SURFACE_CACHE_DEBUG)
+ 		u64 memory_hash = 0;
+ #else
+-		std::array<std::pair<u32, u64>, 3> memory_tag_samples;
++		// 3 classic probes + one per ~2 rows: SPUs write whole rows, a strip that misses every probe is shown stale
++		std::array<std::pair<u32, u64>, 3 + 544> memory_tag_samples;
+ #endif
+ 
+ 		std::vector<deferred_clipped_region<image_storage_type>> old_contents;
+@@ -441,6 +443,7 @@ namespace rsx
+ 			reset();
+ 
+ 			base_addr = address;
++			memory_tag_synced = false;
+ 
+ 			const u32 size_x = (native_pitch > 8)? (native_pitch - 8) : 0u;
+ 			const u32 size_y = u32(surface_height * samples_y) - 1u;
+@@ -457,12 +460,19 @@ namespace rsx
+ 				{0, size_y},
+ 			};
+ 
+-			for (uint n = 0; n < memory_tag_samples.size(); ++n)
++			for (uint n = 0; n < 3; ++n)
+ 			{
+ 				const auto sample_offset = (samples[n].y * rsx_pitch) + samples[n].x;
+ 				memory_tag_samples[n].first = (sample_offset + base_addr);
+ 			}
+ 
++			for (uint n = 0; n < 544; ++n)
++			{
++				const u32 x = (size_x * (2 * (n % 8) + 1) / 16) & ~7u;
++				const u32 y = size_y * n / 544;
++				memory_tag_samples[3 + n].first = (y * rsx_pitch) + x + base_addr;
++			}
++
+ 			const u32 internal_height = get_surface_height<rsx::surface_metrics::samples>();
+ 			const u32 excess = (rsx_pitch - native_pitch);
+ 			memory_range = rsx::address_range32::start_length(base_addr, internal_height * rsx_pitch - excess);
+@@ -470,6 +480,7 @@ namespace rsx
+ 
+ 		void sync_tag()
+ 		{
++			memory_tag_synced = true;
+ 			for (auto &e : memory_tag_samples)
+ 			{
+ 				e.second = *reinterpret_cast<nse_t<u64, 1>*>(vm::g_sudo_addr + e.first);
+@@ -647,7 +658,8 @@ namespace rsx
+ 
+ 		void on_write(u64 write_tag = 0,
+ 			rsx::surface_state_flags resolve_flags = surface_state_flags::require_resolve,
+-			surface_raster_type type = rsx::surface_raster_type::undefined)
++			surface_raster_type type = rsx::surface_raster_type::undefined,
++			bool keep_external_writes = false)
+ 		{
+ 			if (write_tag)
+ 			{
+@@ -655,8 +667,13 @@ namespace rsx
+ 				last_use_tag = write_tag;
+ 			}
+ 
+-			// Tag unconditionally without introducing new data
+-			sync_tag();
++			// Tag without introducing new data. A draw must not re-tag memory that changed under the bound target
++			// (e.g. SPUs writing their strips into a display buffer): that would hide the change from the next
++			// memory barrier, and the rows written in between are never loaded (GT6 stale/"interlaced" bands).
++			if (!keep_external_writes || !memory_tag_synced || test())
++			{
++				sync_tag();
++			}
+ 
+ 			// HACK!! This should be cleared through memory barriers only
+ 			state_flags = rsx::surface_state_flags::ready;
+diff --git a/rpcs3/Emu/RSX/GL/GLRenderTargets.cpp b/rpcs3/Emu/RSX/GL/GLRenderTargets.cpp
+index d60a4b69b..99194e0bc 100644
+--- a/rpcs3/Emu/RSX/GL/GLRenderTargets.cpp
++++ b/rpcs3/Emu/RSX/GL/GLRenderTargets.cpp
+@@ -514,9 +514,13 @@ void gl::render_target::memory_barrier(gl::command_context& cmd, rsx::surface_ac
+ 		// No memory to inherit
+ 		if (dirty() && (read_access || state_flags & rsx::surface_state_flags::erase_bkgnd))
+ 		{
++			// Tag before reading memory: rows written while the load runs (SPUs still writing) then fail the
++			// next test and get loaded, instead of being tagged as loaded.
++			sync_tag();
++
+ 			// Initialize memory contents if we did not find anything usable
+ 			initialize_memory(cmd, access);
+-			on_write();
++			on_write(0, rsx::surface_state_flags::require_resolve, rsx::surface_raster_type::undefined, true);
+ 		}
+ 
+ 		if (msaa_flags & rsx::surface_state_flags::require_resolve)
+diff --git a/rpcs3/Emu/RSX/VK/VKRenderTargets.cpp b/rpcs3/Emu/RSX/VK/VKRenderTargets.cpp
+index aca679943..cc7d6cb65 100644
+--- a/rpcs3/Emu/RSX/VK/VKRenderTargets.cpp
++++ b/rpcs3/Emu/RSX/VK/VKRenderTargets.cpp
+@@ -1003,11 +1003,15 @@ namespace vk
+ 		{
+ 			if (state_flags & rsx::surface_state_flags::erase_bkgnd)
+ 			{
++				// Tag before reading memory: rows written while the load runs (SPUs still writing) then fail the
++				// next test and get loaded, instead of being tagged as loaded.
++				sync_tag();
++
+ 				// NOTE: This step CAN introduce MSAA flags!
+ 				initialize_memory(cmd, access);
+ 
+ 				ensure(state_flags == rsx::surface_state_flags::ready);
+-				on_write(rsx::get_shared_tag(), static_cast<rsx::surface_state_flags>(msaa_flags));
++				on_write(rsx::get_shared_tag(), static_cast<rsx::surface_state_flags>(msaa_flags), rsx::surface_raster_type::undefined, true);
+ 			}
+ 
+ 			if (msaa_flags & rsx::surface_state_flags::require_resolve)

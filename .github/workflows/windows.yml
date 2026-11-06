@@ -1,0 +1,53 @@
+name: Windows build + smoke test
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build portable zip (launcher + bundled RPCS3 + SDL3)
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1
+
+      - name: Smoke test
+        shell: pwsh
+        env:
+          GT6L_HOME: ${{ runner.temp }}\gt6l-home
+        run: |
+          $ErrorActionPreference = "Stop"
+          $t = Join-Path $env:RUNNER_TEMP "smoke"
+          Expand-Archive dist\GT6-Launcher-win64.zip -DestinationPath $t -Force
+          $app = Join-Path $t "GT6-Launcher"
+          $exe = Join-Path $app "GT6-Launcher.exe"
+          foreach ($f in @($exe, "$app\rpcs3\rpcs3.exe", "$app\_internal\SDL3.dll")) {
+            if (-not (Test-Path $f)) { throw "missing in package: $f" }
+            Write-Host "ok: $f"
+          }
+          # 1. CLI: resolves the bundled emulator, reads (empty) state, must exit 0
+          $p = Start-Process $exe -ArgumentList "status" -Wait -PassThru -NoNewWindow
+          if ($p.ExitCode -ne 0) { throw "launcher 'status' exited with $($p.ExitCode)" }
+          Write-Host "ok: launcher CLI status (exit 0)"
+          # 2. GUI: must start and still be running after 20 s (headless Qt)
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $g = Start-Process $exe -PassThru
+          Start-Sleep -Seconds 20
+          if ($g.HasExited) { throw "launcher GUI exited early with code $($g.ExitCode)" }
+          Stop-Process -Id $g.Id -Force
+          Write-Host "ok: launcher GUI stayed up for 20 s"
+          # 3. bundled RPCS3 starts
+          $r = Start-Process "$app\rpcs3\rpcs3.exe" -ArgumentList "--version" -Wait -PassThru -NoNewWindow
+          Write-Host "rpcs3 --version exit code: $($r.ExitCode)"
+          if ($r.ExitCode -ne 0) { throw "bundled rpcs3.exe failed to start" }
+          Write-Host "SMOKE TEST PASSED"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GT6-Launcher-win64
+          path: dist/GT6-Launcher-win64.zip
