@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+permissions:
+  contents: read
+  actions: read     # to fetch the GT6-patched RPCS3 artifact
 jobs:
   build:
     runs-on: windows-2022
@@ -12,6 +15,28 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Get the GT6-patched RPCS3 (latest successful "GT6 RPCS3 for Windows" run)
+        id: rpcs3
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $run = gh run list --repo ${{ github.repository }} --workflow rpcs3-gt6-windows.yml --status success --limit 1 --json databaseId --jq ".[0].databaseId"
+          if (-not $run) {
+            Write-Host "::warning::No GT6-patched RPCS3 build yet - packaging the stock RPCS3 instead"
+            "patched=false" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+          gh run download $run --repo ${{ github.repository }} -n rpcs3-gt6-win64 -D "$env:RUNNER_TEMP\rpcs3dl"
+          $7z = Get-ChildItem "$env:RUNNER_TEMP\rpcs3dl" -Filter *.7z | Select-Object -First 1
+          $dst = "$env:RUNNER_TEMP\rpcs3-gt6"
+          & 7z x -y "-o$dst" $7z.FullName | Out-Null
+          if (-not (Test-Path "$dst\rpcs3.exe")) { throw "rpcs3.exe missing in the patched build" }
+          "GT6-patched RPCS3 ($($7z.Name), build run $run). Patches: emulator/gt6-patches" | Set-Content "$dst\GT6-PATCHED.txt"
+          "GT6L_BUNDLE_RPCS3_DIR=$dst" >> $env:GITHUB_ENV
+          "patched=true" >> $env:GITHUB_OUTPUT
+          Write-Host "bundling patched RPCS3: $($7z.Name)"
+
       - name: Build portable zip (launcher + bundled RPCS3 + SDL3)
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1
@@ -70,6 +95,12 @@ jobs:
             Write-Host "ok: rpcs3.exe --version"
           } else {
             Write-Host "note: no Vulkan driver on this CI machine - rpcs3.exe start check skipped"
+          }
+          if ("${{ steps.rpcs3.outputs.patched }}" -eq "true") {
+            if (-not (Test-Path "$app\rpcs3\GT6-PATCHED.txt")) { throw "patched RPCS3 expected but marker missing" }
+            Write-Host "ok: package contains the GT6-patched RPCS3"
+          } else {
+            Write-Host "note: package contains the STOCK RPCS3"
           }
           Write-Host "SMOKE TEST PASSED"
 

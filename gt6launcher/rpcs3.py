@@ -72,8 +72,12 @@ def patched_build_ready(path: str) -> bool:
     return os.path.isfile(path) and os.path.isfile(path + ".ready")
 
 
+PATCHED_MARKER = "GT6-PATCHED.txt"   # written next to rpcs3.exe by the Windows packaging
+
+
 def is_patched_build(binary: str) -> bool:
-    return "gt6" in os.path.basename(binary).lower()
+    return "gt6" in os.path.basename(binary).lower() or \
+        os.path.isfile(os.path.join(os.path.dirname(binary), PATCHED_MARKER))
 
 
 STOCK_BUILD_WARNING = ("Stock RPCS3 build: official builds since v0.0.42-20037 freeze for ~1 s during GT6 races "
