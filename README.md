@@ -20,7 +20,7 @@
 
 ---
 
-## Why this exists: GT6 is a notoriously difficult PS3 game
+## Why this exists: GT6 is a notoriously difficult PS3 game to run
 
 Gran Turismo 6 (2013) came out at the end of the PS3 generation and pushes the console's Cell
 processor harder than almost any other game. For years it was a showcase of what was *not* working
