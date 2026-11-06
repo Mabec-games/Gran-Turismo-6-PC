@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+    # only when something that ends up in the Windows package changes - not for README/docs edits
+    paths:
+      - "gt6launcher/**"
+      - "packaging/**"
+      - "requirements.txt"
+      - ".github/workflows/windows.yml"
 permissions:
   contents: read
   actions: read     # to fetch the GT6-patched RPCS3 artifact
