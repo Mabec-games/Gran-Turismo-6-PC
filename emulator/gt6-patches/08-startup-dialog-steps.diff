@@ -1,0 +1,27 @@
+--- a/rpcs3/rpcs3qt/gui_application.cpp
++++ b/rpcs3/rpcs3qt/gui_application.cpp
+@@ -102,12 +102,23 @@
+ 	m_show_next_dialog = [this, step_index, steps]()
+ 	{
+ 		ensure(steps && step_index);
++
++		// GT6 build: a dialog's finished() can fire twice (e.g. "Yes" activated twice before the
++		// box is deleted). Ignore surplus calls instead of running past the last step (range check crash).
++		if (*step_index >= steps->size())
++		{
++			gui_log.warning("Ignoring surplus startup dialog step (%d of %d)", *step_index + 1, steps->size());
++			return;
++		}
++
+ 		const auto& func = ::at32(*steps, (*step_index)++);
+ 		ensure(func);
+ 		func();
+ 	};
+ 
+-	if (!rpcs3::is_release_build() && !rpcs3::is_local_build())
++	// GT6 build: the GT6 launcher starts this build on purpose and boots the game right away;
++	// a modal "experimental build" question behind the fullscreen game only gets in the way.
++	if (!rpcs3::is_release_build() && !rpcs3::is_local_build() && !qEnvironmentVariableIsSet("GT6_LAUNCHER"))
+ 	{
+ 		steps->push_back([this]()
+ 		{

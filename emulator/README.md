@@ -12,6 +12,7 @@ patches in [`gt6-patches/`](gt6-patches), applied in order:
 | `05-savestate-pending-sysutil` | Saving a state during the opening movie no longer aborts |
 | `06-usercmd-no-drain-stall` | **The ~1 s freezes in races** (RPCS3 #19549): pre-#19549 USER_COMMAND behaviour. `RPCS3_USERCMD_MODE=upstream` restores upstream behaviour for A/B tests. |
 | `07-gt6-theme-and-memlock` | Launcher colours for the in-game home menu, window icon from `GT6_WINDOW_ICON`, and memory locking stops after the first failure (no syscall + log spam when the system limit is low) |
+| `08-startup-dialog-steps` | Fixes a startup crash ("Range check failed", `gui_application.cpp`) when a startup dialog is confirmed twice, and skips the "Experimental Build Warning" when the GT6 launcher starts the emulator (`GT6_LAUNCHER`) |
 
 Patches 01–05 started from abowen's GT6 RPCS3 research and were rebased onto the current upstream.
 

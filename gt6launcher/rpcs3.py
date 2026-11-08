@@ -31,6 +31,8 @@ def _clean_env() -> dict[str, str]:
     # Our own AppImage runtime variables must not confuse RPCS3's AppImage detection.
     for var in ("APPIMAGE", "APPDIR", "ARGV0", "OWD", "APPIMAGE_EXTRACT_AND_RUN"):
         env.pop(var, None)
+    # GT6-patched RPCS3 (patch 08): started by the launcher -> no "Experimental Build" question
+    env["GT6_LAUNCHER"] = "1"
     if paths.IS_WINDOWS:
         env["RPCS3_CONFIG_DIR"] = paths.rpcs3_config_dir().replace("\\", "/").rstrip("/") + "/"
     else:
