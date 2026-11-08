@@ -8,7 +8,7 @@ import threading
 import traceback
 from typing import Callable, Optional
 
-from PySide6.QtCore import QObject, QRectF, Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtCore import QObject, QRectF, Qt, QThread, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QIcon, QImage, QLinearGradient, QPainter
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QGroupBox,
@@ -124,6 +124,30 @@ def restyle(w: QWidget, name: str) -> None:
     w.setObjectName(name)
     w.style().unpolish(w)
     w.style().polish(w)
+
+
+class _Relay(QObject):
+    """Runs ``fn`` on the GUI thread when connected to a worker signal.
+
+    PySide6 runs a plain Python callable connected to a signal on the *emitting* thread.
+    Worker-thread code that touches widgets (message boxes, refresh) then hangs on Windows
+    ("Not responding" blank dialog). A slot of a QObject that lives in the GUI thread is
+    queued to that thread instead."""
+
+    def __init__(self, fn: Callable, parent: QObject):
+        super().__init__(parent)
+        self.fn = fn
+
+    @Slot()
+    @Slot(object)
+    def call(self, *a) -> None:
+        self.fn(*a)
+
+
+def _on_gui(signal, fn: Callable, owner: QObject) -> "_Relay":
+    r = _Relay(fn, owner)
+    signal.connect(r.call)
+    return r
 
 
 class Job(QObject):
@@ -1124,8 +1148,9 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, title, msg)
             self.refresh()
 
-        job.done.connect(finish)
-        job.failed.connect(fail)
+        relays = [_on_gui(job.done, finish, self), _on_gui(job.failed, fail, self)]
+        th.finished.connect(th.deleteLater)
+        relays.append(_on_gui(th.finished, lambda: [r.deleteLater() for r in relays], self))
         job.done.connect(th.quit)
         job.failed.connect(th.quit)
         self.job, self.thread = job, th
@@ -1143,13 +1168,19 @@ class MainWindow(QMainWindow):
         th = QThread(self)
         job.moveToThread(th)
         th.started.connect(job.run)
-        job.done.connect(done)
-        job.failed.connect(lambda m: self._append_log(f"[bg failed] {m}"))
+        relays = [_on_gui(job.done, done, self),
+                  _on_gui(job.failed, lambda m: self._append_log(f"[bg failed] {m}"), self)]
         job.done.connect(th.quit)
         job.failed.connect(th.quit)
         th.finished.connect(th.deleteLater)
         self._bg = getattr(self, "_bg", []) + [(job, th)]
-        th.finished.connect(lambda pair=(job, th): self._bg.remove(pair) if pair in self._bg else None)
+
+        def cleanup(pair=(job, th)):
+            if pair in self._bg:
+                self._bg.remove(pair)
+            for r in relays:
+                r.deleteLater()
+        relays.append(_on_gui(th.finished, cleanup, self))
         th.start()
 
     def _end_job(self) -> None:
