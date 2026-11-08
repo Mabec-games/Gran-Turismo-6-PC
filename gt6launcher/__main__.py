@@ -36,7 +36,10 @@ def cli(argv: list[str]) -> int:
     for c in ("prepare", "play", "mod-install", "mod-uninstall"):
         p = sub.add_parser(c); p.add_argument("title", nargs="?")
     p = sub.add_parser("mod-import"); p.add_argument("path")
+    sub.add_parser("diag-dlldir")  # Windows CI: emulator child must not inherit our DLL dir
     a = ap.parse_args(argv)
+    if a.cmd == "diag-dlldir":
+        return _diag_dlldir()
     core = Core()
 
     def entry(tid):
@@ -82,6 +85,30 @@ def cli(argv: list[str]) -> int:
         while mods.installed_stack(g.title_id):
             print("removed", mods.uninstall_top(g.title_id))
     return 0
+
+
+def _diag_dlldir() -> int:
+    """Start a child the way RPCS3 is started and print the DLL directory it inherited.
+
+    Exit 1 if it is the launcher's _internal folder (RPCS3 would then load our old
+    VCRUNTIME140.dll and stop with "module ... was incorrectly installed")."""
+    import subprocess
+    from .rpcs3 import _popen
+    ps = ("Add-Type -Name K -Namespace W -MemberDefinition '[DllImport(\"kernel32.dll\", CharSet=CharSet.Unicode)]"
+          " public static extern uint GetDllDirectoryW(uint n, System.Text.StringBuilder b);';"
+          " $b = New-Object System.Text.StringBuilder 1024; [void][W.K]::GetDllDirectoryW(1024, $b);"
+          " Write-Output (\"DLLDIR=\" + $b.ToString())")
+    out = _popen(["powershell", "-NoProfile", "-Command", ps], stdout=subprocess.PIPE,
+                 stderr=subprocess.STDOUT, text=True).communicate(timeout=120)[0]
+    print(out.strip())
+    base = getattr(sys, "_MEIPASS", "") or ""
+    line = next((l for l in out.splitlines() if l.startswith("DLLDIR=")), None)
+    if line is None:
+        print("diag-dlldir: no result")
+        return 2
+    leaked = bool(base) and line[7:].strip().lower().rstrip("\\") == base.lower().rstrip("\\")
+    print("LEAKED" if leaked else "OK")
+    return 1 if leaked else 0
 
 
 def main() -> int:

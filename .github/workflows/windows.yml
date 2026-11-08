@@ -65,6 +65,11 @@ jobs:
           $p = Start-Process $exe -ArgumentList "status" -Wait -PassThru -NoNewWindow
           if ($p.ExitCode -ne 0) { throw "launcher 'status' exited with $($p.ExitCode)" }
           Write-Host "ok: launcher CLI status (exit 0)"
+          # 1b. the emulator must not inherit the launcher's DLL dir (_internal): RPCS3 would load our
+          #     old VCRUNTIME140.dll and refuse to start ("module ... was incorrectly installed")
+          $d = Start-Process $exe -ArgumentList "diag-dlldir" -Wait -PassThru -NoNewWindow
+          if ($d.ExitCode -ne 0) { throw "emulator child inherits the launcher DLL directory ($($d.ExitCode))" }
+          Write-Host "ok: emulator child gets a clean DLL search path"
           # 2. GUI: must start and still be running after 20 s (headless Qt)
           $env:QT_QPA_PLATFORM = "offscreen"
           $g = Start-Process $exe -PassThru

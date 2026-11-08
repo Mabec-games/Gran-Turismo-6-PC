@@ -39,6 +39,25 @@ def _clean_env() -> dict[str, str]:
     return env
 
 
+def _popen(cmd: list[str], **kw) -> subprocess.Popen:
+    """subprocess.Popen without PyInstaller's DLL search dir leaking into the child (Windows).
+
+    The frozen launcher calls SetDllDirectoryW(<_internal>), and child processes inherit it.
+    rpcs3.exe ships no VC++ runtime and would then load the launcher's older
+    _internal\\VCRUNTIME140*.dll next to the system's newer MSVCP140.dll -> crash at start.
+    """
+    base = getattr(sys, "_MEIPASS", None)
+    if not (paths.IS_WINDOWS and base):
+        return subprocess.Popen(cmd, **kw)
+    import ctypes
+    k32 = ctypes.windll.kernel32
+    k32.SetDllDirectoryW(None)
+    try:
+        return subprocess.Popen(cmd, **kw)
+    finally:
+        k32.SetDllDirectoryW(base)
+
+
 def bundled_rpcs3() -> Optional[str]:
     """RPCS3 shipped inside the launcher bundle (copied to a persistent place on first use)."""
     candidates = []
@@ -221,7 +240,7 @@ class RPCS3:
         kw = {}
         if paths.IS_WINDOWS:
             kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
-        p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=_clean_env(),
+        p = _popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=_clean_env(),
                              stdin=subprocess.DEVNULL, text=True, errors="replace", **kw)
         try:
             out, _ = p.communicate(timeout=timeout)
@@ -287,14 +306,14 @@ class RPCS3:
         kw = {}
         if not paths.IS_WINDOWS:
             kw["start_new_session"] = True
-        return subprocess.Popen(cmd, env=env, stdin=subprocess.DEVNULL, **kw)
+        return _popen(cmd, env=env, stdin=subprocess.DEVNULL, **kw)
 
     def open_gui(self) -> subprocess.Popen:
         seed_gui_settings()
         kw = {} if paths.IS_WINDOWS else {"start_new_session": True}
         env = _clean_env()
         env["GT6_WINDOW_ICON"] = window_icon()
-        return subprocess.Popen(self._cmd(), env=env, stdin=subprocess.DEVNULL, **kw)
+        return _popen(self._cmd(), env=env, stdin=subprocess.DEVNULL, **kw)
 
     @staticmethod
     def stop(p: subprocess.Popen) -> None:
