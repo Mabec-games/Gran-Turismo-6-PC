@@ -112,6 +112,9 @@ class Settings:
     accurate_rsx_reservation: bool = True
     multithreaded_rsx: bool = False
     async_texture_streaming: bool = False
+    # GT6 binds tiled RSX memory (cellGcmSetTile); without this the race standings/name
+    # strip and other HUD text can show coloured noise blocks
+    handle_tiled_memory: bool = True
     audio_time_stretch: bool = True   # smooth audio through short FPS dips (intro/name screen)
     audio_buffer_ms: int = 50
     # controller: auto = first connected gamepad (else keyboard), pad = controller_device,
@@ -211,6 +214,7 @@ def build_custom_config(s: Settings, version: str | None, title_id: str = "") ->
         "Stretch To Display Area": ASPECTS.get(s.aspect) is not None,
         "Disable ZCull Occlusion Queries": s.zcull_queries_disabled,
         "Force CPU Blit": cpu_blit,
+        "Handle RSX Memory Tiling": s.handle_tiled_memory,
         "Multithreaded RSX": s.multithreaded_rsx,
         "Resolution Scale": scale,
         "Anisotropic Filter Override": s.anisotropic,

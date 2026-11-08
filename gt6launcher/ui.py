@@ -535,6 +535,8 @@ class MainWindow(QMainWindow):
              "Fixes reward-screen slowdowns and Garage car-image softlocks; may crackle audio in bumper cam."),
             ("accurate_rsx_reservation", "Accurate RSX reservation access", "Fewer RSX desyncs (recommended)."),
             ("multithreaded_rsx", "Multithreaded RSX", "Causes vertex explosions on cars in GT6 - keep off."),
+            ("handle_tiled_memory", "Handle RSX memory tiling",
+             "Fixes coloured noise over driver names / HUD text in races (recommended)."),
             ("async_texture_streaming", "Asynchronous texture streaming", ""),
             ("audio_time_stretch", "Audio time stretching", "Smoother audio when the game slows down."),
             ("use_gamemode", "Feral GameMode", ""),
@@ -615,7 +617,9 @@ class MainWindow(QMainWindow):
                           "- Cashier: move the slider to the amount you want (steps of Cr. 100,000) and press Exec "
                           "- this SETS your credits to that amount.\n"
                           "- Garage: add cars at random.\n"
-                          "Save afterwards. Never use Misc -> Delete Save Data in that menu. Not for online play.",
+                          "Save afterwards. Never use Misc -> Delete Save Data in that menu. Not for online play.\n"
+                          "While on, the race pause menu also shows the developer-only 'Force finish' button; "
+                          "its label reads 'caption_FORCE_FINISH' because the game has no text for it.",
                           9, name="muted"))
         v.addWidget(g)
         g = QGroupBox("Mod readme")

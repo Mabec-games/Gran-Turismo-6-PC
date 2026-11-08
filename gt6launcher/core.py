@@ -53,7 +53,7 @@ class Core:
         self.settings = Settings.from_dict(self.data.get("profile", {}))
         self._migrate()
 
-    PROFILE_REV = 2
+    PROFILE_REV = 3
 
     def _migrate(self) -> None:
         rev = int(self.data.get("profile_rev", 1))
@@ -61,6 +61,9 @@ class Core:
             # rev 2: audio time stretching on by default (fixes crackle during FPS dips)
             self.settings.audio_time_stretch = True
             self.settings.audio_buffer_ms = max(self.settings.audio_buffer_ms, 50)
+        if rev < 3 and "profile" in self.data:
+            # rev 3: RSX memory tiling on (noise over race name strip / HUD text)
+            self.settings.handle_tiled_memory = True
         if rev != self.PROFILE_REV:
             self.data["profile_rev"] = self.PROFILE_REV
             self.save()
