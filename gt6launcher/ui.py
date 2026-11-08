@@ -406,6 +406,9 @@ class MainWindow(QMainWindow):
         self._loading = False
         if pads is None:
             self.pad_lbl.setText("Gamepad detection unavailable (SDL3 library not found).")
+        elif not pads:
+            self.pad_lbl.setText("No gamepad connected. Connect it (8BitDo: X-input mode) and click Refresh."
+                                 if paths.IS_WINDOWS else "No gamepad connected.")
         else:
             self.pad_lbl.setText(f"Connected: {', '.join(pads)}" if pads else "No gamepad connected.")
 

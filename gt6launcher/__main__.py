@@ -54,6 +54,9 @@ def cli(argv: list[str]) -> int:
         print("RPCS3:", rp or "not found", "" if not rp or is_patched_build(rp) else f"\n  ! {STOCK_BUILD_WARNING}")
         if rp:
             print("Firmware:", core.rpcs3().firmware_version() or "not installed")
+        from . import gamepad
+        pads = gamepad.list_gamepads()
+        print("Gamepads:", "detection unavailable" if pads is None else (", ".join(pads) or "none connected"))
         for g in core.games():
             print(f"{g.label}: {g.image.path}\n  installed {g.installed or '01.00'}, target {core.target_version(g.title_id)}, "
                   f"mods {mods.installed_stack(g.title_id) or '-'}")

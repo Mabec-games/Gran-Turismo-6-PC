@@ -42,7 +42,48 @@ def _load_sdl3() -> Optional[ctypes.CDLL]:
     return None
 
 
+XINPUT_PREFIX = "XInput Pad #"   # RPCS3 xinput_pad_handler device names: "XInput Pad #1".."#4"
+
+
+def _xinput_pads() -> list[str]:
+    """Windows: XInput slots with a connected pad (Xbox pads, 8BitDo in X-input mode...)."""
+    if not paths.IS_WINDOWS:
+        return []
+
+    class _State(ctypes.Structure):
+        _fields_ = [("packet", ctypes.c_uint32), ("buttons", ctypes.c_uint16), ("lt", ctypes.c_uint8),
+                    ("rt", ctypes.c_uint8), ("lx", ctypes.c_int16), ("ly", ctypes.c_int16),
+                    ("rx", ctypes.c_int16), ("ry", ctypes.c_int16)]
+    for dll in ("xinput1_4", "xinput1_3", "xinput9_1_0"):
+        try:
+            get = getattr(ctypes.windll, dll).XInputGetState
+            break
+        except (OSError, AttributeError):
+            continue
+    else:
+        return []
+    get.argtypes = [ctypes.c_uint32, ctypes.POINTER(_State)]
+    get.restype = ctypes.c_uint32
+    out = []
+    for i in range(4):
+        st = _State()
+        if get(i, ctypes.byref(st)) == 0:  # ERROR_SUCCESS
+            out.append(f"{XINPUT_PREFIX}{i + 1}")
+    return out
+
+
 def list_gamepads() -> Optional[list[str]]:
+    """Connected gamepads as RPCS3 device names, or None if no detection backend is available.
+
+    Windows: XInput pads first (RPCS3's XInput handler), then SDL devices. Elsewhere: SDL."""
+    xi = _xinput_pads()
+    sdl_pads = _sdl_gamepads()
+    if sdl_pads is None and not paths.IS_WINDOWS:
+        return None
+    return xi + (sdl_pads or [])
+
+
+def _sdl_gamepads() -> Optional[list[str]]:
     """RPCS3-style SDL device names of connected gamepads, or None if SDL3 is unavailable."""
     sdl = _load_sdl3()
     if sdl is None:
@@ -56,12 +97,19 @@ def list_gamepads() -> Optional[list[str]]:
     sdl.SDL_free.argtypes = [ctypes.c_void_p]
     sdl.SDL_SetHint.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
     # same hints RPCS3 sets (they can change which driver - and name - SDL uses)
-    for k, v in ((b"SDL_JOYSTICK_HIDAPI_PS3_SIXAXIS_DRIVER", b"1"), (b"SDL_JOYSTICK_HIDAPI_PS3", b"1"),
-                 (b"SDL_JOYSTICK_HIDAPI_LG4FF", b"0")):
+    for k, v in ((b"SDL_JOYSTICK_THREAD", b"1"), (b"SDL_JOYSTICK_HIDAPI_PS3_SIXAXIS_DRIVER", b"1"),
+                 (b"SDL_JOYSTICK_HIDAPI_PS3", b"1"), (b"SDL_JOYSTICK_HIDAPI_LG4FF", b"0")):
         sdl.SDL_SetHint(k, v)
     if not sdl.SDL_Init(SDL_INIT_GAMEPAD):
         return None
     try:
+        # devices are discovered asynchronously (notably XInput/RawInput on Windows):
+        # pump events briefly, as RPCS3's own SDL loop does, before asking for the list
+        import time
+        for _ in range(8):
+            sdl.SDL_PumpEvents()
+            sdl.SDL_UpdateGamepads()
+            time.sleep(0.04)
         count = ctypes.c_int(0)
         ids = sdl.SDL_GetGamepads(ctypes.byref(count))
         seen: dict[str, int] = {}
@@ -107,7 +155,7 @@ def configure(mode: str, device: str = "", log=print) -> str:
     cfg = load_cfg(input_config_path())
     p1 = dict(cfg.get("Player 1 Input", {}) or {})
     if mode == "pad" and device:
-        new = {"Handler": "SDL", "Device": device}
+        new = {"Handler": "XInput" if device.startswith(XINPUT_PREFIX) else "SDL", "Device": device}
     else:
         new = {"Handler": "Keyboard", "Device": "Keyboard"}
     if p1.get("Handler") != new["Handler"] or p1.get("Device") != new["Device"]:
@@ -116,7 +164,7 @@ def configure(mode: str, device: str = "", log=print) -> str:
         cfg["Player 1 Input"] = p1
         atomic_write(input_config_path(), dump_cfg(cfg))
         log(f"controller: player 1 -> {new['Handler']} / {new['Device']}")
-    return f"Player 1: {new['Device']}" if new["Handler"] == "SDL" else "Player 1: keyboard (no gamepad found)"
+    return f"Player 1: {new['Device']}" if new["Handler"] != "Keyboard" else "Player 1: keyboard (no gamepad found)"
 
 
 # =========================================================================== racing wheels
