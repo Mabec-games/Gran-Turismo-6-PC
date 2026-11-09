@@ -255,7 +255,7 @@ jobs:
           fi
           echo "ok: CLI status exited 0 and recognized GT6-patched RPCS3"
 
-          MANAGED_RPCS3="$XDG_DATA_HOME/gt6-launcher/rpcs3-bin/rpcs3-gt6-x86_64.AppImage"
+          MANAGED_RPCS3="$GT6L_HOME/rpcs3-bin/rpcs3-gt6-x86_64.AppImage"
           test -x "$MANAGED_RPCS3"
           VER_OUT="$("$MANAGED_RPCS3" --version)"
           echo "$VER_OUT"
