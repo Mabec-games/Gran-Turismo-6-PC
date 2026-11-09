@@ -1,0 +1,346 @@
+name: Linux (Ubuntu / SDL2) build + smoke test
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - "gt6launcher/**"
+      - "packaging/**"
+      - "emulator/gt6-patches/**"
+      - "requirements.txt"
+      - ".github/workflows/linux.yml"
+
+permissions:
+  contents: read
+
+env:
+  RPCS3_COMMIT: eee3f0f7c285f2b8aa18fec278a2146c5cd874eb   # 0.0.43-20565
+
+jobs:
+  rpcs3:
+    name: RPCS3 (GT6 patches) Linux Jammy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      BUILD_REPOSITORY_NAME: Mabec-games/rpcs3-gt6
+      BUILD_SOURCEBRANCHNAME: gt6
+      BUILD_PR_NUMBER: ""
+      BUILD_SOURCEVERSION: ${{ github.sha }}
+      BUILD_ARTIFACTSTAGINGDIRECTORY: ${{ github.workspace }}/artifacts
+      CCACHE_DIR: ${{ github.workspace }}/ccache
+      DEPLOY_APPIMAGE: "true"
+      APPDIR: "/rpcs3/build/appdir"
+      ARTDIR: "/root/artifacts"
+      RELEASE_MESSAGE: "/rpcs3/GitHubReleaseMessage.txt"
+      COMPILER: clang
+      RUN_UNIT_TESTS: "OFF"
+    steps:
+      - name: Checkout GT6 PC (patches)
+        uses: actions/checkout@v4
+        with:
+          path: gt6pc
+
+      - name: Restore cached GT6-patched RPCS3 Linux build
+        id: rpcs3-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BUILD_ARTIFACTSTAGINGDIRECTORY }}
+          key: rpcs3-gt6-jammy-v1-${{ env.RPCS3_COMMIT }}-${{ hashFiles('gt6pc/emulator/gt6-patches/**') }}
+
+      - name: Checkout upstream RPCS3 at the pinned commit
+        if: steps.rpcs3-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: RPCS3/rpcs3
+          ref: ${{ env.RPCS3_COMMIT }}
+          path: rpcs3
+          fetch-depth: 0
+
+      - name: Apply GT6 patches
+        if: steps.rpcs3-cache.outputs.cache-hit != 'true'
+        working-directory: rpcs3
+        run: |
+          for p in ../gt6pc/emulator/gt6-patches/*.diff; do
+            echo ">> $(basename "$p")"
+            git apply --whitespace=nowarn "$p"
+          done
+          git diff --stat | tail -3
+
+      - name: Restore RPCS3 compiler cache
+        if: steps.rpcs3-cache.outputs.cache-hit != 'true'
+        id: ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: gt6-ccache-linux-clang-${{ github.run_id }}
+          restore-keys: gt6-ccache-linux-clang-
+
+      - name: Build GT6-patched RPCS3 AppImage in Ubuntu 22.04 Jammy container
+        if: steps.rpcs3-cache.outputs.cache-hit != 'true'
+        working-directory: rpcs3
+        run: |
+          mkdir -p "$CCACHE_DIR" "$BUILD_ARTIFACTSTAGINGDIRECTORY"
+          docker pull --quiet rpcs3/rpcs3-ci-jammy:2.2
+          docker run --rm \
+            -w / \
+            -v "$PWD:/rpcs3" \
+            --env-file .ci/docker.env \
+            -v "$CCACHE_DIR:/root/.ccache" \
+            -v "$BUILD_ARTIFACTSTAGINGDIRECTORY:/root/artifacts" \
+            rpcs3/rpcs3-ci-jammy:2.2 \
+            /bin/sh -exc '
+              /rpcs3/.ci/build-linux.sh
+              cp /rpcs3/build/AppDir/usr/lib/libSDL3.so.0 /root/artifacts/libSDL3.so.0
+              mv /root/artifacts/rpcs3-*.AppImage /root/artifacts/rpcs3-gt6-x86_64.AppImage
+              chmod -R a+rwX /root/artifacts /root/.ccache
+            '
+          ls -lh "$BUILD_ARTIFACTSTAGINGDIRECTORY"
+
+      - name: Save RPCS3 compiler cache
+        if: steps.rpcs3-cache.outputs.cache-hit != 'true' && always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: gt6-ccache-linux-clang-${{ github.run_id }}
+
+      - name: Upload GT6-patched RPCS3 Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpcs3-gt6-linux64
+          path: ${{ env.BUILD_ARTIFACTSTAGINGDIRECTORY }}
+          compression-level: 0
+          if-no-files-found: error
+
+  build:
+    name: Build Ubuntu/SDL2 AppImage + Smoke Test
+    needs: rpcs3
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download GT6-patched RPCS3 Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rpcs3-gt6-linux64
+          path: rpcs3-gt6
+
+      - name: Build GT6-Launcher-Ubuntu-SDL2-x86_64.AppImage in Ubuntu 22.04 (GLIBC 2.35)
+        run: |
+          chmod +x rpcs3-gt6/rpcs3-gt6-x86_64.AppImage packaging/build_appimage.sh
+          docker pull --quiet ubuntu:22.04
+          docker run --rm \
+            -v "$PWD:/work" \
+            -w /work \
+            ubuntu:22.04 \
+            /bin/bash -exc '
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -qq
+              apt-get install -y -qq \
+                python3 python3-venv python3-dev python3-pip \
+                curl file binutils patchelf desktop-file-utils \
+                libglib2.0-0 libdbus-1-3 libfontconfig1 libfreetype6 \
+                libegl1 libgl1 libx11-6 libx11-xcb1 libxext6 libxrender1 \
+                libxkbcommon0 libxkbcommon-x11-0 \
+                libxcb1 libxcb-cursor0 libxcb-glx0 libxcb-icccm4 libxcb-image0 \
+                libxcb-keysyms1 libxcb-randr0 libxcb-render0 libxcb-render-util0 \
+                libxcb-shape0 libxcb-shm0 libxcb-sync1 libxcb-util1 libxcb-xfixes0 \
+                libxcb-xkb1 libxcb-xinerama0 libxcb-xinput0
+
+              curl -fsSLo /usr/local/bin/linuxdeploy \
+                "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+              chmod +x /usr/local/bin/linuxdeploy
+
+              python3 -m venv /tmp/venv
+              /tmp/venv/bin/pip install --upgrade pip
+              /tmp/venv/bin/pip install PySide6-Essentials pyinstaller pyyaml
+
+              export PY=/tmp/venv/bin/python
+              export GT6L_BUNDLE_RPCS3=/work/rpcs3-gt6/rpcs3-gt6-x86_64.AppImage
+              export GT6L_LIBSDL3=/work/rpcs3-gt6/libSDL3.so.0
+              export LDAI_OUTPUT=/work/dist/GT6-Launcher-Ubuntu-SDL2-x86_64.AppImage
+              ./packaging/build_appimage.sh
+              chmod -R a+rwX /work/dist /work/build-appimage
+            '
+          ls -lh dist/GT6-Launcher-Ubuntu-SDL2-x86_64.AppImage
+
+      - name: Smoke test (GLIBC audit + CLI + Headless GUI + SDL2/SDL3 + Ubuntu 22.04/24.04/26.04)
+        run: |
+          set -euo pipefail
+          REPO_DIR="$PWD"
+          APPIMG="$REPO_DIR/dist/GT6-Launcher-Ubuntu-SDL2-x86_64.AppImage"
+          test -x "$APPIMG"
+
+          echo "=== 1. Extract outer Launcher AppImage and inner RPCS3 AppImage ==="
+          SMOKE_DIR="$(mktemp -d)"
+          cd "$SMOKE_DIR"
+          APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMG" --appimage-extract >/dev/null
+          mv squashfs-root outer-root
+          test -f outer-root/usr/share/gt6-launcher/app/gt6-launcher
+          test -f outer-root/usr/share/gt6-launcher/app/_internal/libSDL3.so.0
+          test -f outer-root/usr/share/gt6-launcher/rpcs3/rpcs3-gt6-x86_64.AppImage
+          if ls outer-root/usr/share/gt6-launcher/app/_internal/libstdc++.so* >/dev/null 2>&1; then
+            echo "ERROR: libstdc++.so must not be bundled in _internal (breaks newer Mesa/Wayland hosts)"
+            exit 1
+          fi
+
+          mkdir inner-extract
+          cd inner-extract
+          APPIMAGE_EXTRACT_AND_RUN=1 ../outer-root/usr/share/gt6-launcher/rpcs3/rpcs3-gt6-x86_64.AppImage --appimage-extract >/dev/null
+          cd "$SMOKE_DIR"
+
+          echo "=== 2. Verify GT6 patches are compiled into bundled RPCS3 ==="
+          if ! strings inner-extract/squashfs-root/usr/bin/rpcs3 | grep -q "GT6_LAUNCHER"; then
+            echo "ERROR: bundled rpcs3 binary is missing GT6_LAUNCHER patch marker!"
+            exit 1
+          fi
+          echo "ok: bundled rpcs3 binary contains GT6 patches"
+
+          echo "=== 3. Audit GLIBC symbol versions across all bundled ELF binaries (must be <= 2.35) ==="
+          python3 - "$SMOKE_DIR/outer-root" "$(readlink -f "$SMOKE_DIR/inner-extract/squashfs-root")" <<'PY'
+          import os, re, subprocess, sys
+
+          roots = sys.argv[1:]
+          max_allowed = (2, 35)
+          highest = (0, 0)
+          offenders = []
+          checked = 0
+
+          for root in roots:
+              for dirpath, _, filenames in os.walk(root):
+                  for fn in filenames:
+                      p = os.path.join(dirpath, fn)
+                      if os.path.islink(p) or not os.path.isfile(p) or fn.endswith(".AppImage"):
+                          continue
+                      try:
+                          with open(p, "rb") as f:
+                              if f.read(4) != b"\x7fELF":
+                                  continue
+                      except OSError:
+                          continue
+                      checked += 1
+                      out = subprocess.check_output(["objdump", "-T", p], text=True, stderr=subprocess.DEVNULL)
+                      vers = [tuple(map(int, m.split("."))) for m in re.findall(r"GLIBC_(\d+\.\d+)", out)]
+                      if vers:
+                          vmax = max(vers)
+                          if vmax > highest:
+                              highest = vmax
+                          if vmax > max_allowed:
+                              offenders.append((os.path.relpath(p, root), f"GLIBC_{vmax[0]}.{vmax[1]}"))
+
+          print(f"Audited {checked} ELF binaries/libraries. Highest GLIBC required: {highest[0]}.{highest[1]}")
+          if offenders:
+              print("ERROR: ELF files requiring GLIBC > 2.35:", offenders[:20])
+              sys.exit(1)
+          PY
+
+          echo "=== 4. Host (Ubuntu 24.04) CLI status + bundled RPCS3 --version + headless GUI (20s) ==="
+          export GT6L_HOME="$SMOKE_DIR/gt6l-home"
+          export XDG_DATA_HOME="$SMOKE_DIR/xdg-data"
+          export XDG_CONFIG_HOME="$SMOKE_DIR/xdg-config"
+          export XDG_CACHE_HOME="$SMOKE_DIR/xdg-cache"
+          export APPIMAGE_EXTRACT_AND_RUN=1
+
+          STATUS_OUT="$("$APPIMG" status)"
+          echo "$STATUS_OUT"
+          echo "$STATUS_OUT" | grep -q "rpcs3-gt6-x86_64.AppImage"
+          if echo "$STATUS_OUT" | grep -q "Stock RPCS3 build"; then
+            echo "ERROR: Launcher reported stock RPCS3 warning instead of recognizing GT6-patched RPCS3!"
+            exit 1
+          fi
+          echo "ok: CLI status exited 0 and recognized GT6-patched RPCS3"
+
+          MANAGED_RPCS3="$XDG_DATA_HOME/gt6-launcher/rpcs3-bin/rpcs3-gt6-x86_64.AppImage"
+          test -x "$MANAGED_RPCS3"
+          VER_OUT="$("$MANAGED_RPCS3" --version)"
+          echo "$VER_OUT"
+          echo "$VER_OUT" | grep -q "RPCS3"
+          echo "ok: Bundled RPCS3 --version succeeded"
+
+          QT_QPA_PLATFORM=offscreen "$APPIMG" &
+          GUI_PID=$!
+          sleep 20
+          if ! kill -0 "$GUI_PID" 2>/dev/null; then
+            echo "ERROR: Launcher GUI exited early on Ubuntu 24.04!"
+            exit 1
+          fi
+          kill "$GUI_PID" || true
+          wait "$GUI_PID" 2>/dev/null || true
+          echo "ok: Launcher GUI stayed up for 20s on Ubuntu 24.04"
+
+          echo "=== 5. Verify both SDL3 and SDL2 gamepad + racing wheel backends ==="
+          sudo apt-get update -qq && sudo apt-get install -y -qq libsdl2-2.0-0
+          python3 - "$REPO_DIR" "$SMOKE_DIR" <<'PY'
+          import ctypes, os, sys
+          repo_dir, smoke_dir = sys.argv[1], sys.argv[2]
+          sys.path.insert(0, repo_dir)
+          from gt6launcher import gamepad
+
+          # Test 1: Bundled SDL3 from the AppImage
+          sdl3_path = os.path.join(smoke_dir, "outer-root/usr/share/gt6-launcher/app/_internal/libSDL3.so.0")
+          gamepad._load_sdl3 = lambda: ctypes.CDLL(sdl3_path)
+          assert gamepad.list_gamepads() is not None, "SDL3 list_gamepads returned None"
+          j3 = gamepad.Joysticks()
+          assert j3.sdl_ver == 3
+          j3.close()
+          print("ok: SDL3 backend verified")
+
+          # Test 2: SDL2 fallback (simulating SDL2-only system with virtual pad + wheel)
+          gamepad._load_sdl3 = lambda: None
+          sdl2 = gamepad._load_sdl2()
+          assert sdl2 is not None, "SDL2 library failed to load"
+          sdl2.SDL_Init(0x2200)
+          sdl2.SDL_JoystickAttachVirtual.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+          sdl2.SDL_JoystickAttachVirtual.restype = ctypes.c_int
+          idx = sdl2.SDL_JoystickAttachVirtual(1, 6, 16, 1)
+          assert idx >= 0, "Failed to attach virtual SDL2 controller"
+          pads = gamepad.list_gamepads()
+          print("SDL2 virtual gamepads:", pads)
+          assert pads and len(pads) >= 1, "SDL2 failed to detect virtual controller"
+          sdl2.SDL_Init(0x200)
+          sdl2.SDL_JoystickAttachVirtual(2, 4, 12, 1)
+          j2 = gamepad.Joysticks()
+          assert j2.sdl_ver == 2
+          assert any(d["is_wheel"] for d in j2.devices), f"SDL2 failed to detect virtual wheel: {j2.devices}"
+          j2.close()
+          print("ok: SDL2 fallback backend verified (gamepad + racing wheel)")
+          PY
+
+          echo "=== 6. Smoke test inside clean Ubuntu 22.04 and Ubuntu rolling/devel containers ==="
+          for IMG in ubuntu:22.04 ubuntu:rolling; do
+            echo "--- Testing inside $IMG ---"
+            docker pull --quiet "$IMG"
+            docker run --rm -v "$APPIMG:/app/GT6-Launcher.AppImage:ro" "$IMG" /bin/bash -exc '
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -qq
+              apt-get install -y -qq \
+                libglib2.0-0 libdbus-1-3 libfontconfig1 libfreetype6 \
+                libegl1 libgl1 libx11-6 libx11-xcb1 libxext6 libxrender1 \
+                libxkbcommon0 libxkbcommon-x11-0 \
+                libxcb1 libxcb-cursor0 libxcb-glx0 libxcb-icccm4 libxcb-image0 \
+                libxcb-keysyms1 libxcb-randr0 libxcb-render0 libxcb-render-util0 \
+                libxcb-shape0 libxcb-shm0 libxcb-sync1 libxcb-util1 libxcb-xfixes0 \
+                libxcb-xkb1 libxcb-xinerama0 libxcb-xinput0 libsdl2-2.0-0
+              export APPIMAGE_EXTRACT_AND_RUN=1
+              export QT_QPA_PLATFORM=offscreen
+              /app/GT6-Launcher.AppImage status
+              /app/GT6-Launcher.AppImage &
+              PID=$!
+              sleep 10
+              kill -0 "$PID"
+              kill "$PID" || true
+            '
+            echo "ok: $IMG container smoke test passed"
+          done
+
+          echo "ALL LINUX SMOKE TESTS PASSED"
+
+      - name: Upload Ubuntu/SDL2 AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GT6-Launcher-Ubuntu-SDL2-x86_64
+          path: dist/GT6-Launcher-Ubuntu-SDL2-x86_64.AppImage
+          compression-level: 0
+          if-no-files-found: error

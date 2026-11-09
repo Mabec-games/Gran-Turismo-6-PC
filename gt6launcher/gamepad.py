@@ -33,7 +33,41 @@ def _load_sdl3() -> Optional[ctypes.CDLL]:
     else:
         if base:
             names += glob.glob(os.path.join(base, "libSDL3.so*"))
-        names += ["libSDL3.so.0", "libSDL3.so", ctypes.util.find_library("SDL3") or ""]
+        names += [
+            "libSDL3.so.0",
+            "libSDL3.so",
+            "/usr/lib/x86_64-linux-gnu/libSDL3.so.0",
+            "/usr/lib64/libSDL3.so.0",
+            "/usr/lib/libSDL3.so.0",
+            ctypes.util.find_library("SDL3") or "",
+        ]
+    for n in filter(None, names):
+        try:
+            return ctypes.CDLL(n)
+        except OSError:
+            continue
+    return None
+
+
+def _load_sdl2() -> Optional[ctypes.CDLL]:
+    names = []
+    base = getattr(sys, "_MEIPASS", None)
+    if paths.IS_WINDOWS:
+        if base:
+            names.append(os.path.join(base, "SDL2.dll"))
+        names += [os.path.join(os.path.dirname(sys.executable), "SDL2.dll"), "SDL2.dll"]
+    else:
+        if base:
+            names += glob.glob(os.path.join(base, "libSDL2*.so*"))
+        names += [
+            "libSDL2-2.0.so.0",
+            "libSDL2.so",
+            "/usr/lib/x86_64-linux-gnu/libSDL2-2.0.so.0",
+            "/usr/lib64/libSDL2-2.0.so.0",
+            "/usr/lib/libSDL2-2.0.so.0",
+            ctypes.util.find_library("SDL2-2.0") or "",
+            ctypes.util.find_library("SDL2") or "",
+        ]
     for n in filter(None, names):
         try:
             return ctypes.CDLL(n)
@@ -102,6 +136,26 @@ def _sdl_pump(sdl: ctypes.CDLL, rounds: int = 8) -> None:
         time.sleep(0.04)
 
 
+def _sdl2_init(sdl: ctypes.CDLL, flags: int) -> bool:
+    sdl.SDL_SetHint.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+    sdl.SDL_SetHint.restype = ctypes.c_int
+    sdl.SDL_Init.argtypes = [ctypes.c_uint32]
+    sdl.SDL_Init.restype = ctypes.c_int
+    for k, v in _SDL_HINTS:
+        sdl.SDL_SetHint(k, v)
+    return sdl.SDL_Init(flags) == 0
+
+
+def _sdl2_pump(sdl: ctypes.CDLL, rounds: int = 8) -> None:
+    import time
+    sdl.SDL_PumpEvents.argtypes, sdl.SDL_PumpEvents.restype = [], None
+    sdl.SDL_JoystickUpdate.argtypes, sdl.SDL_JoystickUpdate.restype = [], None
+    for _ in range(rounds):
+        sdl.SDL_PumpEvents()
+        sdl.SDL_JoystickUpdate()
+        time.sleep(0.04)
+
+
 def list_gamepads() -> Optional[list[str]]:
     """Connected gamepads as RPCS3 device names, or None if no detection backend is available.
 
@@ -114,17 +168,17 @@ def list_gamepads() -> Optional[list[str]]:
 
 
 def _sdl_gamepads() -> Optional[list[str]]:
-    """RPCS3-style SDL device names of connected gamepads, or None if SDL3 is unavailable."""
+    """RPCS3-style SDL device names of connected gamepads, or None if SDL3/SDL2 is unavailable."""
     sdl = _load_sdl3()
     if sdl is None:
-        return None
+        return _sdl2_gamepads()
     sdl.SDL_GetGamepads.argtypes = [ctypes.POINTER(ctypes.c_int)]
     sdl.SDL_GetGamepads.restype = ctypes.POINTER(ctypes.c_uint32)
     sdl.SDL_GetGamepadNameForID.argtypes = [ctypes.c_uint32]
     sdl.SDL_GetGamepadNameForID.restype = ctypes.c_char_p
     sdl.SDL_free.argtypes = [ctypes.c_void_p]
     if not _sdl_init(sdl, SDL_INIT_GAMEPAD):
-        return None
+        return _sdl2_gamepads()
     try:
         db = os.path.join(paths.rpcs3_settings_dir(), "input_configs", "gamecontrollerdb.txt")
         if os.path.isfile(db) and hasattr(sdl, "SDL_AddGamepadMappingsFromFile"):
@@ -143,6 +197,48 @@ def _sdl_gamepads() -> Optional[list[str]]:
             out.append(f"{name} {seen[name]}")
         if ids:
             sdl.SDL_free(ids)
+        return out
+    finally:
+        sdl.SDL_QuitSubSystem.argtypes = [ctypes.c_uint32]
+        sdl.SDL_QuitSubSystem(SDL_INIT_GAMEPAD)
+
+
+def _sdl2_gamepads() -> Optional[list[str]]:
+    """SDL2 fallback for distros with libSDL2-2.0.so.0 instead of SDL3."""
+    sdl = _load_sdl2()
+    if sdl is None:
+        return None
+    sdl.SDL_NumJoysticks.argtypes = []
+    sdl.SDL_NumJoysticks.restype = ctypes.c_int
+    sdl.SDL_IsGameController.argtypes = [ctypes.c_int]
+    sdl.SDL_IsGameController.restype = ctypes.c_int
+    sdl.SDL_GameControllerNameForIndex.argtypes = [ctypes.c_int]
+    sdl.SDL_GameControllerNameForIndex.restype = ctypes.c_char_p
+    sdl.SDL_JoystickNameForIndex.argtypes = [ctypes.c_int]
+    sdl.SDL_JoystickNameForIndex.restype = ctypes.c_char_p
+    if not _sdl2_init(sdl, SDL_INIT_GAMEPAD):
+        return None
+    try:
+        db = os.path.join(paths.rpcs3_settings_dir(), "input_configs", "gamecontrollerdb.txt")
+        if os.path.isfile(db) and hasattr(sdl, "SDL_RWFromFile") and hasattr(sdl, "SDL_GameControllerAddMappingsFromRW"):
+            sdl.SDL_RWFromFile.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+            sdl.SDL_RWFromFile.restype = ctypes.c_void_p
+            sdl.SDL_GameControllerAddMappingsFromRW.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            sdl.SDL_GameControllerAddMappingsFromRW.restype = ctypes.c_int
+            rw = sdl.SDL_RWFromFile(db.encode("utf-8"), b"rb")
+            if rw:
+                sdl.SDL_GameControllerAddMappingsFromRW(rw, 1)
+        _sdl2_pump(sdl)
+        count = sdl.SDL_NumJoysticks()
+        seen: dict[str, int] = {}
+        out = []
+        for i in range(count):
+            if not sdl.SDL_IsGameController(i):
+                continue
+            raw = sdl.SDL_GameControllerNameForIndex(i) or sdl.SDL_JoystickNameForIndex(i)
+            name = raw.decode("utf-8", "replace") if raw else "Gamepad"
+            seen[name] = seen.get(name, 0) + 1
+            out.append(f"{name} {seen[name]}")
         return out
     finally:
         sdl.SDL_QuitSubSystem.argtypes = [ctypes.c_uint32]
@@ -219,70 +315,118 @@ class Joysticks:
 
     def __init__(self):
         self.sdl = _load_sdl3()
+        self.sdl_ver = 3
         if self.sdl is None:
-            raise RuntimeError("SDL3 library not found")
+            self.sdl = _load_sdl2()
+            self.sdl_ver = 2
+        if self.sdl is None:
+            raise RuntimeError("SDL3/SDL2 library not found")
         s = self.sdl
-        for name, args, res in (
-                ("SDL_GetJoysticks", [ctypes.POINTER(ctypes.c_int)], ctypes.POINTER(ctypes.c_uint32)),
-                ("SDL_OpenJoystick", [ctypes.c_uint32], ctypes.c_void_p),
-                ("SDL_CloseJoystick", [ctypes.c_void_p], None),
-                ("SDL_GetJoystickName", [ctypes.c_void_p], ctypes.c_char_p),
-                ("SDL_GetJoystickVendor", [ctypes.c_void_p], ctypes.c_uint16),
-                ("SDL_GetJoystickProduct", [ctypes.c_void_p], ctypes.c_uint16),
-                ("SDL_GetJoystickType", [ctypes.c_void_p], ctypes.c_int),
-                ("SDL_GetNumJoystickAxes", [ctypes.c_void_p], ctypes.c_int),
-                ("SDL_GetNumJoystickHats", [ctypes.c_void_p], ctypes.c_int),
-                ("SDL_GetNumJoystickButtons", [ctypes.c_void_p], ctypes.c_int),
-                ("SDL_GetJoystickAxis", [ctypes.c_void_p, ctypes.c_int], ctypes.c_int16),
-                ("SDL_GetJoystickHat", [ctypes.c_void_p, ctypes.c_int], ctypes.c_uint8),
-                ("SDL_GetJoystickButton", [ctypes.c_void_p, ctypes.c_int], ctypes.c_bool),
-                ("SDL_UpdateJoysticks", [], None),
-                ("SDL_free", [ctypes.c_void_p], None),
-                ("SDL_QuitSubSystem", [ctypes.c_uint32], None)):
-            fn = getattr(s, name)
-            fn.argtypes, fn.restype = args, res
-        if not _sdl_init(s, SDL_INIT_JOYSTICK):
-            raise RuntimeError("SDL joystick init failed")
+        if self.sdl_ver == 3:
+            for name, args, res in (
+                    ("SDL_GetJoysticks", [ctypes.POINTER(ctypes.c_int)], ctypes.POINTER(ctypes.c_uint32)),
+                    ("SDL_OpenJoystick", [ctypes.c_uint32], ctypes.c_void_p),
+                    ("SDL_CloseJoystick", [ctypes.c_void_p], None),
+                    ("SDL_GetJoystickName", [ctypes.c_void_p], ctypes.c_char_p),
+                    ("SDL_GetJoystickVendor", [ctypes.c_void_p], ctypes.c_uint16),
+                    ("SDL_GetJoystickProduct", [ctypes.c_void_p], ctypes.c_uint16),
+                    ("SDL_GetJoystickType", [ctypes.c_void_p], ctypes.c_int),
+                    ("SDL_GetNumJoystickAxes", [ctypes.c_void_p], ctypes.c_int),
+                    ("SDL_GetNumJoystickHats", [ctypes.c_void_p], ctypes.c_int),
+                    ("SDL_GetNumJoystickButtons", [ctypes.c_void_p], ctypes.c_int),
+                    ("SDL_GetJoystickAxis", [ctypes.c_void_p, ctypes.c_int], ctypes.c_int16),
+                    ("SDL_GetJoystickHat", [ctypes.c_void_p, ctypes.c_int], ctypes.c_uint8),
+                    ("SDL_GetJoystickButton", [ctypes.c_void_p, ctypes.c_int], ctypes.c_bool),
+                    ("SDL_UpdateJoysticks", [], None),
+                    ("SDL_free", [ctypes.c_void_p], None),
+                    ("SDL_QuitSubSystem", [ctypes.c_uint32], None)):
+                fn = getattr(s, name)
+                fn.argtypes, fn.restype = args, res
+            if not _sdl_init(s, SDL_INIT_JOYSTICK):
+                raise RuntimeError("SDL joystick init failed")
+        else:
+            for name, args, res in (
+                    ("SDL_NumJoysticks", [], ctypes.c_int),
+                    ("SDL_JoystickOpen", [ctypes.c_int], ctypes.c_void_p),
+                    ("SDL_JoystickClose", [ctypes.c_void_p], None),
+                    ("SDL_JoystickName", [ctypes.c_void_p], ctypes.c_char_p),
+                    ("SDL_JoystickGetVendor", [ctypes.c_void_p], ctypes.c_uint16),
+                    ("SDL_JoystickGetProduct", [ctypes.c_void_p], ctypes.c_uint16),
+                    ("SDL_JoystickGetType", [ctypes.c_void_p], ctypes.c_int),
+                    ("SDL_JoystickNumAxes", [ctypes.c_void_p], ctypes.c_int),
+                    ("SDL_JoystickNumHats", [ctypes.c_void_p], ctypes.c_int),
+                    ("SDL_JoystickNumButtons", [ctypes.c_void_p], ctypes.c_int),
+                    ("SDL_JoystickGetAxis", [ctypes.c_void_p, ctypes.c_int], ctypes.c_int16),
+                    ("SDL_JoystickGetHat", [ctypes.c_void_p, ctypes.c_int], ctypes.c_uint8),
+                    ("SDL_JoystickGetButton", [ctypes.c_void_p, ctypes.c_int], ctypes.c_uint8),
+                    ("SDL_JoystickUpdate", [], None),
+                    ("SDL_QuitSubSystem", [ctypes.c_uint32], None)):
+                fn = getattr(s, name)
+                fn.argtypes, fn.restype = args, res
+            if not _sdl2_init(s, SDL_INIT_JOYSTICK):
+                raise RuntimeError("SDL2 joystick init failed")
         self.devices: list[dict] = []
         self.refresh(rounds=8)
 
     def refresh(self, rounds: int = 3) -> list[dict]:
         self.close_all()
         s = self.sdl
-        _sdl_pump(s, rounds)  # without this Windows reports no devices (wheel wizard saw nothing)
-        n = ctypes.c_int(0)
-        ids = s.SDL_GetJoysticks(ctypes.byref(n))
-        for i in range(n.value):
-            h = s.SDL_OpenJoystick(ids[i])
-            if not h:
-                continue
-            raw = s.SDL_GetJoystickName(h)
-            d = {"handle": h, "name": raw.decode("utf-8", "replace") if raw else "Joystick",
-                 "vendor": s.SDL_GetJoystickVendor(h), "product": s.SDL_GetJoystickProduct(h),
-                 "axes": s.SDL_GetNumJoystickAxes(h), "hats": s.SDL_GetNumJoystickHats(h),
-                 "buttons": s.SDL_GetNumJoystickButtons(h)}
-            d["is_wheel"] = s.SDL_GetJoystickType(h) == SDL_JOYSTICK_TYPE_WHEEL or "wheel" in d["name"].lower()
-            d["type_id"] = type_id(d["vendor"], d["product"], d["axes"], d["hats"], d["buttons"])
-            self.devices.append(d)
-        if ids:
-            s.SDL_free(ids)
+        if self.sdl_ver == 3:
+            _sdl_pump(s, rounds)  # without this Windows reports no devices (wheel wizard saw nothing)
+            n = ctypes.c_int(0)
+            ids = s.SDL_GetJoysticks(ctypes.byref(n))
+            for i in range(n.value):
+                h = s.SDL_OpenJoystick(ids[i])
+                if not h:
+                    continue
+                raw = s.SDL_GetJoystickName(h)
+                d = {"handle": h, "name": raw.decode("utf-8", "replace") if raw else "Joystick",
+                     "vendor": s.SDL_GetJoystickVendor(h), "product": s.SDL_GetJoystickProduct(h),
+                     "axes": s.SDL_GetNumJoystickAxes(h), "hats": s.SDL_GetNumJoystickHats(h),
+                     "buttons": s.SDL_GetNumJoystickButtons(h)}
+                d["is_wheel"] = s.SDL_GetJoystickType(h) == SDL_JOYSTICK_TYPE_WHEEL or "wheel" in d["name"].lower()
+                d["type_id"] = type_id(d["vendor"], d["product"], d["axes"], d["hats"], d["buttons"])
+                self.devices.append(d)
+            if ids:
+                s.SDL_free(ids)
+        else:
+            _sdl2_pump(s, rounds)
+            count = s.SDL_NumJoysticks()
+            for i in range(count):
+                h = s.SDL_JoystickOpen(i)
+                if not h:
+                    continue
+                raw = s.SDL_JoystickName(h)
+                d = {"handle": h, "name": raw.decode("utf-8", "replace") if raw else "Joystick",
+                     "vendor": s.SDL_JoystickGetVendor(h), "product": s.SDL_JoystickGetProduct(h),
+                     "axes": s.SDL_JoystickNumAxes(h), "hats": s.SDL_JoystickNumHats(h),
+                     "buttons": s.SDL_JoystickNumButtons(h)}
+                d["is_wheel"] = s.SDL_JoystickGetType(h) == SDL_JOYSTICK_TYPE_WHEEL or "wheel" in d["name"].lower()
+                d["type_id"] = type_id(d["vendor"], d["product"], d["axes"], d["hats"], d["buttons"])
+                self.devices.append(d)
         return self.devices
 
     def state(self) -> list[dict]:
         """Snapshot of every axis/hat/button of every device."""
         s = self.sdl
-        s.SDL_UpdateJoysticks()
+        if self.sdl_ver == 3:
+            s.SDL_UpdateJoysticks()
+        else:
+            s.SDL_JoystickUpdate()
         out = []
         for d in self.devices:
             h = d["handle"]
-            out.append({"axes": [s.SDL_GetJoystickAxis(h, i) for i in range(d["axes"])],
-                        "hats": [s.SDL_GetJoystickHat(h, i) for i in range(d["hats"])],
-                        "buttons": [bool(s.SDL_GetJoystickButton(h, i)) for i in range(d["buttons"])]})
+            out.append({"axes": [s.SDL_GetJoystickAxis(h, i) if self.sdl_ver == 3 else s.SDL_JoystickGetAxis(h, i) for i in range(d["axes"])],
+                        "hats": [s.SDL_GetJoystickHat(h, i) if self.sdl_ver == 3 else s.SDL_JoystickGetHat(h, i) for i in range(d["hats"])],
+                        "buttons": [bool(s.SDL_GetJoystickButton(h, i) if self.sdl_ver == 3 else s.SDL_JoystickGetButton(h, i)) for i in range(d["buttons"])]})
         return out
 
     def close_all(self) -> None:
         for d in self.devices:
-            self.sdl.SDL_CloseJoystick(d["handle"])
+            if self.sdl_ver == 3:
+                self.sdl.SDL_CloseJoystick(d["handle"])
+            else:
+                self.sdl.SDL_JoystickClose(d["handle"])
         self.devices = []
 
     def close(self) -> None:
