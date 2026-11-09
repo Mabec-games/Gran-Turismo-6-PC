@@ -221,7 +221,10 @@ jobs:
                       except OSError:
                           continue
                       checked += 1
-                      out = subprocess.check_output(["objdump", "-T", p], text=True, stderr=subprocess.DEVNULL)
+                      res = subprocess.run(["objdump", "-T", p], text=True, capture_output=True)
+                      if res.returncode != 0:
+                          continue
+                      out = res.stdout
                       vers = [tuple(map(int, m.split("."))) for m in re.findall(r"GLIBC_(\d+\.\d+)", out)]
                       if vers:
                           vmax = max(vers)
