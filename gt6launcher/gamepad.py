@@ -72,6 +72,36 @@ def _xinput_pads() -> list[str]:
     return out
 
 
+# hints RPCS3 sets before SDL_Init (rpcs3/Input/sdl_instance.cpp) - they decide which
+# driver handles a device and therefore its name, which RPCS3 matches exactly
+_SDL_HINTS = ((b"SDL_JOYSTICK_THREAD", b"1"),
+              (b"SDL_JOYSTICK_HIDAPI_PS3_SIXAXIS_DRIVER", b"1"),
+              (b"SDL_JOYSTICK_HIDAPI_PS3", b"1"),
+              (b"SDL_JOYSTICK_HIDAPI_LG4FF", b"0"))
+
+
+def _sdl_init(sdl: ctypes.CDLL, flags: int) -> bool:
+    sdl.SDL_SetHint.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+    sdl.SDL_SetHint.restype = ctypes.c_bool
+    sdl.SDL_Init.argtypes = [ctypes.c_uint32]
+    sdl.SDL_Init.restype = ctypes.c_bool
+    for k, v in _SDL_HINTS:
+        sdl.SDL_SetHint(k, v)
+    return bool(sdl.SDL_Init(flags))
+
+
+def _sdl_pump(sdl: ctypes.CDLL, rounds: int = 8) -> None:
+    """Let SDL discover devices. On Windows XInput/RawInput/DirectInput devices arrive
+    asynchronously after SDL_Init; RPCS3 keeps pumping, so must we before listing."""
+    import time
+    sdl.SDL_PumpEvents.argtypes, sdl.SDL_PumpEvents.restype = [], None
+    sdl.SDL_UpdateJoysticks.argtypes, sdl.SDL_UpdateJoysticks.restype = [], None
+    for _ in range(rounds):
+        sdl.SDL_PumpEvents()
+        sdl.SDL_UpdateJoysticks()
+        time.sleep(0.04)
+
+
 def list_gamepads() -> Optional[list[str]]:
     """Connected gamepads as RPCS3 device names, or None if no detection backend is available.
 
@@ -88,28 +118,20 @@ def _sdl_gamepads() -> Optional[list[str]]:
     sdl = _load_sdl3()
     if sdl is None:
         return None
-    sdl.SDL_Init.argtypes = [ctypes.c_uint32]
-    sdl.SDL_Init.restype = ctypes.c_bool
     sdl.SDL_GetGamepads.argtypes = [ctypes.POINTER(ctypes.c_int)]
     sdl.SDL_GetGamepads.restype = ctypes.POINTER(ctypes.c_uint32)
     sdl.SDL_GetGamepadNameForID.argtypes = [ctypes.c_uint32]
     sdl.SDL_GetGamepadNameForID.restype = ctypes.c_char_p
     sdl.SDL_free.argtypes = [ctypes.c_void_p]
-    sdl.SDL_SetHint.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
-    # same hints RPCS3 sets (they can change which driver - and name - SDL uses)
-    for k, v in ((b"SDL_JOYSTICK_THREAD", b"1"), (b"SDL_JOYSTICK_HIDAPI_PS3_SIXAXIS_DRIVER", b"1"),
-                 (b"SDL_JOYSTICK_HIDAPI_PS3", b"1"), (b"SDL_JOYSTICK_HIDAPI_LG4FF", b"0")):
-        sdl.SDL_SetHint(k, v)
-    if not sdl.SDL_Init(SDL_INIT_GAMEPAD):
+    if not _sdl_init(sdl, SDL_INIT_GAMEPAD):
         return None
     try:
-        # devices are discovered asynchronously (notably XInput/RawInput on Windows):
-        # pump events briefly, as RPCS3's own SDL loop does, before asking for the list
-        import time
-        for _ in range(8):
-            sdl.SDL_PumpEvents()
-            sdl.SDL_UpdateGamepads()
-            time.sleep(0.04)
+        db = os.path.join(paths.rpcs3_settings_dir(), "input_configs", "gamecontrollerdb.txt")
+        if os.path.isfile(db) and hasattr(sdl, "SDL_AddGamepadMappingsFromFile"):
+            sdl.SDL_AddGamepadMappingsFromFile.argtypes = [ctypes.c_char_p]
+            sdl.SDL_AddGamepadMappingsFromFile.restype = ctypes.c_int
+            sdl.SDL_AddGamepadMappingsFromFile(db.encode("utf-8"))
+        _sdl_pump(sdl)
         count = ctypes.c_int(0)
         ids = sdl.SDL_GetGamepads(ctypes.byref(count))
         seen: dict[str, int] = {}
@@ -128,8 +150,8 @@ def _sdl_gamepads() -> Optional[list[str]]:
 
 
 def input_config_path() -> str:
-    # global profile "Default" (system_utils.cpp: <config>/input_configs/global/Default.yml)
-    return os.path.join(paths.rpcs3_config_dir(), "input_configs", "global", "Default.yml")
+    # global profile "Default" (system_utils.cpp: get_config_dir(true)/input_configs/global/Default.yml)
+    return os.path.join(paths.rpcs3_settings_dir(), "input_configs", "global", "Default.yml")
 
 
 def current_player1() -> tuple[str, str]:
@@ -144,16 +166,20 @@ def configure(mode: str, device: str = "", log=print) -> str:
     if mode == "manual":
         return "Controller setup managed in RPCS3"
     pads = list_gamepads()
+    cfg = load_cfg(input_config_path())
+    p1 = dict(cfg.get("Player 1 Input", {}) or {})
     if mode == "auto":
         if pads:
             device = pads[0]
             mode = "pad"
         elif pads is None:
             return "SDL3 not found - controller config unchanged"
+        elif p1 and p1.get("Handler") != "Keyboard":
+            # A failed/empty device scan must not silently replace a user's
+            # existing pad or wheel mapping with Keyboard.
+            return f"Player 1: {p1.get('Device', 'gamepad')} (no gamepad detected - kept existing)"
         else:
             mode = "keyboard"
-    cfg = load_cfg(input_config_path())
-    p1 = dict(cfg.get("Player 1 Input", {}) or {})
     if mode == "pad" and device:
         new = {"Handler": "XInput" if device.startswith(XINPUT_PREFIX) else "SDL", "Device": device}
     else:
@@ -197,7 +223,6 @@ class Joysticks:
             raise RuntimeError("SDL3 library not found")
         s = self.sdl
         for name, args, res in (
-                ("SDL_Init", [ctypes.c_uint32], ctypes.c_bool),
                 ("SDL_GetJoysticks", [ctypes.POINTER(ctypes.c_int)], ctypes.POINTER(ctypes.c_uint32)),
                 ("SDL_OpenJoystick", [ctypes.c_uint32], ctypes.c_void_p),
                 ("SDL_CloseJoystick", [ctypes.c_void_p], None),
@@ -216,14 +241,15 @@ class Joysticks:
                 ("SDL_QuitSubSystem", [ctypes.c_uint32], None)):
             fn = getattr(s, name)
             fn.argtypes, fn.restype = args, res
-        if not s.SDL_Init(SDL_INIT_JOYSTICK):
+        if not _sdl_init(s, SDL_INIT_JOYSTICK):
             raise RuntimeError("SDL joystick init failed")
         self.devices: list[dict] = []
-        self.refresh()
+        self.refresh(rounds=8)
 
-    def refresh(self) -> list[dict]:
+    def refresh(self, rounds: int = 3) -> list[dict]:
         self.close_all()
         s = self.sdl
+        _sdl_pump(s, rounds)  # without this Windows reports no devices (wheel wizard saw nothing)
         n = ctypes.c_int(0)
         ids = s.SDL_GetJoysticks(ctypes.byref(n))
         for i in range(n.value):
@@ -295,9 +321,7 @@ def detect_change(base: list[dict], now: list[dict], devices: list[dict], want: 
 
 
 def g27_config_path() -> str:
-    # fs::get_config_dir(true): on Windows RPCS3 keeps this in the "config" sub-folder
-    sub = "config" if paths.IS_WINDOWS else ""
-    return os.path.join(paths.rpcs3_config_dir(), sub, "LogitechG27.yml")
+    return os.path.join(paths.rpcs3_settings_dir(), "LogitechG27.yml")
 
 
 def write_g27_config(mapping: dict[str, dict], enabled: bool, ffb_device: int = 0) -> str:

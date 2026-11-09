@@ -134,7 +134,7 @@ def set_username(name: str) -> None:
 
 
 def global_config_path() -> str:
-    return os.path.join(paths.rpcs3_config_dir(), "config.yml")
+    return os.path.join(paths.rpcs3_settings_dir(), "config.yml")
 
 
 def get_psid() -> str:
@@ -219,8 +219,7 @@ RPCN_SALT = b"No matter where you go, everybody's connected."
 
 
 def rpcn_path() -> str:
-    sub = "config" if paths.IS_WINDOWS else ""
-    return os.path.join(paths.rpcs3_config_dir(), sub, "rpcn.yml")
+    return os.path.join(paths.rpcs3_settings_dir(), "rpcn.yml")
 
 
 def rpcn_get() -> dict:

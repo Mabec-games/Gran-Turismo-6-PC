@@ -186,7 +186,25 @@ def window_icon() -> str:
 
 
 def seed_gui_settings(cfg_dir: Optional[str] = None) -> str:
-    f = os.path.join(cfg_dir or paths.rpcs3_config_dir(), "GuiConfigs", "CurrentSettings.ini")
+    base = cfg_dir or paths.rpcs3_config_dir()
+    if paths.IS_WINDOWS:
+        os.makedirs(os.path.join(base, "log"), exist_ok=True)
+        exe = paths._RPCS3_BINARY
+        if exe and os.path.isfile(exe):
+            exe_dir = os.path.dirname(exe)
+            if os.path.abspath(exe_dir) != os.path.abspath(base):
+                db_src = os.path.join(exe_dir, "config", "input_configs", "gamecontrollerdb.txt")
+                db_dst = os.path.join(paths.rpcs3_settings_dir(base), "input_configs", "gamecontrollerdb.txt")
+                if os.path.isfile(db_src) and not os.path.exists(db_dst):
+                    os.makedirs(os.path.dirname(db_dst), exist_ok=True)
+                    shutil.copy2(db_src, db_dst)
+                for fn in ("config_database.dat", "compat_database.dat"):
+                    s = os.path.join(exe_dir, "GuiConfigs", fn)
+                    d = os.path.join(base, "GuiConfigs", fn)
+                    if os.path.isfile(s) and not os.path.exists(d):
+                        os.makedirs(os.path.dirname(d), exist_ok=True)
+                        shutil.copy2(s, d)
+    f = os.path.join(base, "GuiConfigs", "CurrentSettings.ini")
     os.makedirs(os.path.dirname(f), exist_ok=True)
     try:  # launcher colour scheme as RPCS3's GUI theme (used when RPCS3's own window is opened)
         shutil.copy2(theme_qss(), os.path.join(os.path.dirname(f), THEME_NAME + ".qss"))
@@ -231,6 +249,7 @@ class RPCS3:
     def __init__(self, binary: str, log: Optional[LogFn] = None):
         self.binary = binary
         self.log = log or (lambda s: None)
+        paths.set_rpcs3_binary(binary)
 
     # ------------------------------------------------------------------ helpers
     def _cmd(self, *args: str) -> list[str]:

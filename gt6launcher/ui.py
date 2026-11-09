@@ -338,8 +338,9 @@ class MainWindow(QMainWindow):
         f.addLayout(h)
         self.pad_lbl = label("", 9, name="muted")
         f.addWidget(self.pad_lbl)
-        f.addWidget(label("Automatic uses the first connected gamepad (Xbox, PlayStation, 8BitDo, Switch Pro ...) "
-                          "with standard button mapping, or the keyboard if none is connected. Racing-game style "
+        f.addWidget(label("Automatic uses the first detected gamepad (Xbox, PlayStation, 8BitDo, Switch Pro ...) "
+                          "with standard button mapping; if none is detected, the current RPCS3 input setting is kept. "
+                          "Choose Keyboard explicitly to switch to keyboard input. Racing-game style "
                           "triggers (RT accelerate, LT brake): in the game, Options -> Wireless Controller.", 9, name="muted"))
         h = QHBoxLayout()
         self.wheel_chk = QCheckBox("Use racing wheel")
@@ -1525,8 +1526,13 @@ class WheelWizard(QDialog):
     def _poll(self) -> None:
         import time
         if not self.js.devices:
-            self.js.refresh()
-            self.devices_lbl.setText("Detected: no controllers - connect your wheel")
+            self._rescan = getattr(self, "_rescan", 0) + 1
+            if self._rescan % 40 == 1:  # about once a second (timer runs every 25 ms)
+                self.js.refresh()
+            if not self.js.devices:
+                self.devices_lbl.setText("Detected: no controllers - connect your wheel")
+                return
+            self._start_step()  # device appeared: show it and take a fresh baseline
             return
         now = self.js.state()
         if self.phase == "settle":  # wait until the previous control is released, then take a baseline

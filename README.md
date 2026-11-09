@@ -5,7 +5,7 @@
 <h1 align="center">Gran Turismo 6 PC</h1>
 
 <p align="center">
-  <b>Version 1.1.2</b> · Linux &amp; Windows<br>
+  <b>Version 1.1.3</b> · Linux &amp; Windows<br>
   Gran Turismo 6, one of the hardest PlayStation 3 games to emulate, set up for PC in one download:
   a GT6-tuned emulator, the official updates, modern graphics options, gamepads and racing wheels,
   mods, LAN racing and more, behind a single <b>PLAY</b> button.
@@ -84,11 +84,14 @@ On top of that comes a **patched emulator build** (below) that changes RPCS3 its
 
 ## Download
 
-Get **v1.1.2** from [Releases](../../releases):
+Get **v1.1.3** from [Releases](../../releases):
 
 * **Linux:** `GT6-Launcher-x86_64.AppImage`. Make it executable and start it. It runs on any recent
   x86-64 distribution, including SteamOS.
-* **Windows 10/11:** `GT6-Launcher-win64.zip`. Unzip anywhere and start `GT6-Launcher.exe`.
+* **Windows 10/11:** `GT6-Launcher-win64.zip`. Unzip anywhere and start `GT6-Launcher.exe`. The portable
+  build stores launcher and RPCS3 data, including settings, updates, saves, and logs, in the adjacent `data\` folder;
+  it does not use `%APPDATA%` or `%LOCALAPPDATA%` for application data. If you select an RPCS3 install with its own
+  `portable\` folder beside `rpcs3.exe`, the launcher uses that folder for RPCS3 data, matching RPCS3's own path choice.
 
 **PC requirements:** 8+ CPU threads (GT6 is very CPU-heavy), 16 GB RAM, a Vulkan GPU, ~35 GB of disk space.
 
@@ -120,13 +123,13 @@ Get **v1.1.2** from [Releases](../../releases):
 | UK | BCES01977 | ✔ | 1.22, 1.05 | – | – |
 | Japan / Asia / Latin America / PSN | | ✔ | partly | – | – |
 
-## Status of v1.1.2
+## Status of v1.1.3
 
-Tested: EU 1.22 on Linux (Ryzen 9 6900HS, RTX 3080 Laptop): full update install, first boot,
-races with 6 cars at 60 FPS, mod install/uninstall, gamepad, LAN code verification.
-The Windows package is built and smoke-tested on GitHub Actions. It bundles the GT6-patched RPCS3,
-compiled with RPCS3's own Windows (MSVC) build steps. It has not been played on a Windows PC yet.
-Not yet tested on hardware: racing wheels, two-PC LAN, online, Steam Deck, the Windows version in play.
+Tested: EU 1.22 on Linux (Ryzen 9 6900HS, RTX 3080 Laptop) and Windows 10/11: full update install,
+first boot, races with 6 cars at 60 FPS, mod install/uninstall, gamepad, LAN code verification.
+The Windows package is portable (`data\` beside `GT6-Launcher.exe`) and bundles the GT6-patched RPCS3
+compiled with RPCS3's own Windows (MSVC) build steps.
+Not yet tested on hardware: racing wheels, two-PC LAN, online, Steam Deck.
 Reports are welcome. Attach the log from *Advanced → Open emulator log*.
 
 ## Building

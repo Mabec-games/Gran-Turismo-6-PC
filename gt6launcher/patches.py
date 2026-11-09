@@ -227,12 +227,12 @@ def install_patch_files(rpcs3_cfg_dir: str, extra_title_files: dict[str, str]) -
         atomic_write(os.path.join(dst, fn), text)
 
 
-def write_patch_config(rpcs3_cfg_dir: str, selections: list[tuple[PatchInfo, dict[str, float]]],
+def write_patch_config(rpcs3_settings_dir: str, selections: list[tuple[PatchInfo, dict[str, float]]],
                        keep_foreign: bool = True) -> None:
     """Write patch_config.yml. ``selections`` = [(patch, {config name: value})].
 
     Entries for other games are preserved; GT6 entries are fully owned by the launcher."""
-    path = os.path.join(rpcs3_cfg_dir, "patch_config.yml")
+    path = os.path.join(rpcs3_settings_dir, "patch_config.yml")
     existing: dict[str, Any] = {}
     if keep_foreign and os.path.exists(path):
         try:

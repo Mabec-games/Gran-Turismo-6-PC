@@ -6,7 +6,7 @@
 #
 # RPCS3 is baked in (launcher\rpcs3\rpcs3.exe inside the zip): the pinned build, SHA-256 checked
 # at build time. To ship the GT6-patched Windows RPCS3 instead, set $env:GT6L_BUNDLE_RPCS3_DIR to
-# a folder containing rpcs3.exe. Emulator data/config live in %LOCALAPPDATA%\GT6Launcher\rpcs3.
+# a folder containing rpcs3.exe. All launcher and emulator data lives in the package's data\ folder.
 $ErrorActionPreference = "Stop"
 $Here = Split-Path -Parent $PSScriptRoot          # launcher\
 $Work = Join-Path $Here "build-win"

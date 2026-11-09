@@ -15,7 +15,7 @@ from . import lan, mods, patches, paths
 from . import profile as profile_mod
 from .formats import GameImage, identify_folder, identify_iso
 from .profile import Settings, build_custom_config, desired_patches
-from .rpcs3 import RPCS3, find_rpcs3, installed_version
+from .rpcs3 import RPCS3, find_rpcs3, installed_version, seed_gui_settings
 from .updates import DEFAULT_TARGET, install_chain, Downloader
 from .yamlio import atomic_write, dump_cfg
 
@@ -51,9 +51,13 @@ class Core:
         self.data = self._load()
         self.fresh_install = "profile" not in self.data
         self.settings = Settings.from_dict(self.data.get("profile", {}))
+        # Resolve RPCS3 early so path helpers (game data, patches, controller
+        # profiles, logs) agree with the selected executable's portable/ folder.
+        if paths.IS_WINDOWS:
+            self.rpcs3_path()
         self._migrate()
 
-    PROFILE_REV = 3
+    PROFILE_REV = 4
 
     def _migrate(self) -> None:
         rev = int(self.data.get("profile_rev", 1))
@@ -64,6 +68,18 @@ class Core:
         if rev < 3 and "profile" in self.data:
             # rev 3: RSX memory tiling on (noise over race name strip / HUD text)
             self.settings.handle_tiled_memory = True
+        if rev < 4 and paths.IS_WINDOWS:
+            # rev 4: up to v1.1.2 the Windows launcher wrote RPCS3's settings next to the "config"
+            # sub-folder, where RPCS3 never reads them. Remove those stale copies (the correct
+            # files are written on every start).
+            base = paths.rpcs3_config_dir()
+            for rel in ("custom_configs", "input_configs"):
+                shutil.rmtree(os.path.join(base, rel), ignore_errors=True)
+            for rel in ("patch_config.yml", "config.yml"):
+                try:
+                    os.unlink(os.path.join(base, rel))
+                except OSError:
+                    pass
         if rev != self.PROFILE_REV:
             self.data["profile_rev"] = self.PROFILE_REV
             self.save()
@@ -88,6 +104,7 @@ class Core:
         if cached_key != key or not cached or not os.path.isfile(cached):
             cached = find_rpcs3(key)
             self._rpcs3_cache = (key, cached)
+        paths.set_rpcs3_binary(cached)
         return cached
 
     def rpcs3(self) -> RPCS3:
@@ -236,6 +253,8 @@ class Core:
         the list of enabled patch names (for display)."""
         tid, ver = entry.title_id, entry.installed
         cfg_dir = paths.rpcs3_config_dir()
+        self.log(f"RPCS3 config directory: {cfg_dir}")
+        seed_gui_settings(cfg_dir)
         eff = self.effective_settings(tid, ver)
         # global config: make sure the LAN-relevant parts agree with the custom config
         lan.apply_global_network(eff.lan_enabled or eff.online_enabled, eff.lan_bind_address)
@@ -255,7 +274,7 @@ class Core:
             if p:
                 valid = {c.name for c in p.config}
                 selection.append((p, {k: v for k, v in values.items() if k in valid}))
-        patches.write_patch_config(cfg_dir, selection)
+        patches.write_patch_config(paths.rpcs3_settings_dir(cfg_dir), selection)
         self.log(f"config written for {tid} {ver}: {len(selection)} patches")
         return [p.name for p, _ in selection]
 
