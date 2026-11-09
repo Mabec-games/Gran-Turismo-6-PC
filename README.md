@@ -86,8 +86,8 @@ On top of that comes a **patched emulator build** (below) that changes RPCS3 its
 
 Get **v1.1.3** from [Releases](../../releases):
 
-* **Linux:** `GT6-Launcher-x86_64.AppImage`. Make it executable and start it. It runs on any recent
-  x86-64 distribution, including SteamOS.
+* **Linux (Ubuntu, Debian, Linux Mint, Pop!_OS, SteamOS & SDL2 distros):** `GT6-Launcher-Ubuntu-SDL2-x86_64.AppImage`. Built on Ubuntu 22.04 LTS (`GLIBC 2.35+`) with both SDL3 and SDL2 (`libSDL2-2.0.so.0`) gamepad/wheel support.
+* **Linux (Arch, CachyOS & rolling-release distros):** `GT6-Launcher-x86_64.AppImage`. Make it executable and start it.
 * **Windows 10/11:** `GT6-Launcher-win64.zip`. Unzip anywhere and start `GT6-Launcher.exe`. The portable
   build stores launcher and RPCS3 data, including settings, updates, saves, and logs, in the adjacent `data\` folder;
   it does not use `%APPDATA%` or `%LOCALAPPDATA%` for application data. If you select an RPCS3 install with its own
