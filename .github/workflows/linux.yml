@@ -241,7 +241,7 @@ jobs:
 
           echo "=== 4. Host (Ubuntu 24.04) CLI status + bundled RPCS3 --version + headless GUI (20s) ==="
           sudo apt-get update -qq && sudo apt-get install -y -qq \
-            libopengl0 libgl1 libglx0 libegl1 libvulkan1 libwayland-client0 \
+            xvfb libopengl0 libgl1 libglx0 libegl1 libvulkan1 libwayland-client0 \
             libsm6 libice6 libdrm2 libsdl2-2.0-0
           export GT6L_HOME="$SMOKE_DIR/gt6l-home"
           export XDG_DATA_HOME="$SMOKE_DIR/xdg-data"
@@ -260,7 +260,7 @@ jobs:
 
           MANAGED_RPCS3="$GT6L_HOME/rpcs3-bin/rpcs3-gt6-x86_64.AppImage"
           test -x "$MANAGED_RPCS3"
-          VER_OUT="$("$MANAGED_RPCS3" --version)"
+          VER_OUT="$(xvfb-run -a "$MANAGED_RPCS3" --version)"
           echo "$VER_OUT"
           echo "$VER_OUT" | grep -q "RPCS3"
           echo "ok: Bundled RPCS3 --version succeeded"
