@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QProgressBar, QPushButton, QScrollArea, QSlider, QSpinBox, QSplitter, QTabWidget, QVBoxLayout, QWidget,
 )
 
-from . import lan, mods, patches, paths, profile, updates
+from . import diagnostics, lan, mods, patches, paths, profile, updates
 from .core import Core, GT6_TITLES
 from .rpcs3 import RPCS3, STOCK_BUILD_WARNING, installed_version, is_patched_build
 
@@ -199,6 +199,8 @@ class MainWindow(QMainWindow):
         self.job: Optional[Job] = None
         self.proc: Optional[subprocess.Popen] = None
         self._loading = False
+        self._hardware_warning_shown = False
+        self._last_direct_rpc_origin = ""
         self._patch_index: Optional[list] = None
 
         bg = Background(paths.resource("img/bg.png"))
@@ -234,6 +236,7 @@ class MainWindow(QMainWindow):
         self.poll = QTimer(self)
         self.poll.timeout.connect(self._poll_proc)
         self.poll.start(1000)
+        self._check_external_rpcs3_launch()
         QTimer.singleShot(200, self._first_run)
 
     # ------------------------------------------------------------------ left panel
@@ -501,10 +504,12 @@ class MainWindow(QMainWindow):
         f.addRow("Aspect ratio", self.ctl["aspect"])
         self.ctl["output_resolution"] = self._combo(profile.OUTPUT_RESOLUTIONS, "output_resolution")
         f.addRow("PS3 output", self.ctl["output_resolution"])
-        b = QPushButton("Handheld 800p preset (Steam Deck / 1280x800)")
-        b.setToolTip("720p output, 16:10 aspect, 100 % + FSR upscaling to the 800p screen, lighter effects.")
-        b.clicked.connect(self.apply_handheld_preset)
-        f.addRow("", b)
+        self.handheld_preset_btn = QPushButton()
+        self.handheld_preset_btn.setToolTip(
+            "Apply the 800p handheld graphics preset. Press again to restore the graphics settings you had before.")
+        self.handheld_preset_btn.clicked.connect(self.apply_handheld_preset)
+        self._update_handheld_preset_button()
+        f.addRow("", self.handheld_preset_btn)
         self.ctl["shadows"] = self._combo(profile.SHADOWS, "shadows")
         f.addRow("Shadows", self.ctl["shadows"])
         self.ctl["motion_blur"] = self._combo(profile.MOTION_BLUR, "motion_blur")
@@ -550,6 +555,11 @@ class MainWindow(QMainWindow):
         self.ctl["gpu_adapter"] = QComboBox()
         self.ctl["gpu_adapter"].currentIndexChanged.connect(lambda _i: self._set("gpu_adapter", self.ctl["gpu_adapter"].currentData() or ""))
         f.addRow("GPU", self.ctl["gpu_adapter"])
+        self.ctl["audio_format"] = self._combo(
+            {"Stereo": "Stereo (2.0)", "Surround 5.1": "Surround 5.1"}, "audio_format")
+        self.ctl["audio_format"].setToolTip(
+            "5.1 requires a six-channel output device and operating-system speaker setup.")
+        f.addRow("Audio output", self.ctl["audio_format"])
         self.ctl["render_path"] = self._combo(profile.RENDER_PATHS, "render_path")
         f.addRow("Render path", self.ctl["render_path"])
         self.ctl["spu_block_size"] = self._combo(profile.SPU_BLOCK, "spu_block_size")
@@ -762,7 +772,18 @@ class MainWindow(QMainWindow):
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
         self.log_view.setFont(QFont("monospace", 9))
-        return self.log_view
+        w = QWidget()
+        v = QVBoxLayout(w)
+        actions = QHBoxLayout()
+        save = QPushButton("Save current logs")
+        save.setToolTip("Save the last completed game session's launcher and RPCS3 logs in a new folder."
+                        " Each save is kept separately.")
+        save.clicked.connect(self._save_logs)
+        actions.addWidget(save)
+        actions.addStretch(1)
+        v.addLayout(actions)
+        v.addWidget(self.log_view)
+        return w
 
     # ------------------------------------------------------------------ logging
     def _log_threadsafe(self, s: str) -> None:
@@ -774,6 +795,19 @@ class MainWindow(QMainWindow):
 
     def _append_log(self, s: str) -> None:
         self.log_view.appendPlainText(s.rstrip())
+
+    def _save_logs(self) -> None:
+        try:
+            active = bool(self.proc and self.proc.poll() is None)
+            launcher_path, rpcs3_path = diagnostics.save_logs(self.log_view.toPlainText(), active_session=active)
+        except OSError as e:
+            self._append_log(f"[log save failed] {e}")
+            return
+        self._append_log(f"[logs saved] launcher: {launcher_path}")
+        if rpcs3_path:
+            self._append_log(f"[logs saved] RPCS3: {rpcs3_path}")
+        else:
+            self._append_log("[logs saved] RPCS3 log was not available")
 
     # ------------------------------------------------------------------ settings binding
     def _set(self, key: str, value) -> None:
@@ -849,22 +883,43 @@ class MainWindow(QMainWindow):
         self.ctl["cas_sharpening"].setEnabled(self.s.upscaler == "fsr")
 
     def apply_handheld_preset(self) -> None:
-        for k, v in profile.HANDHELD_PRESET.items():
-            setattr(self.s, k, v)
+        previous = self.core.data.get(self.HANDHELD_RESTORE_KEY)
+        if isinstance(previous, dict) and previous:
+            for key in profile.HANDHELD_PRESET:
+                if key in previous:
+                    setattr(self.s, key, previous[key])
+            self.core.data.pop(self.HANDHELD_RESTORE_KEY, None)
+        else:
+            self.core.data[self.HANDHELD_RESTORE_KEY] = {
+                key: getattr(self.s, key) for key in profile.HANDHELD_PRESET
+            }
+            for key, value in profile.HANDHELD_PRESET.items():
+                setattr(self.s, key, value)
         self.core.save()
         self._load_settings_into_ui()
+        self._update_handheld_preset_button()
         self._fill_patch_list()
+
+    HANDHELD_RESTORE_KEY = "handheld_preset_restore"
+
+    def _update_handheld_preset_button(self) -> None:
+        if hasattr(self, "handheld_preset_btn"):
+            active = bool(self.core.data.get(self.HANDHELD_RESTORE_KEY))
+            self.handheld_preset_btn.setText(
+                "Restore previous graphics settings" if active else "Handheld 800p preset (Steam Deck / 1280x800)")
 
     # settings that 'Reset to recommended' (graphics / emulation) must not touch
     RESET_KEEP = ("lan_enabled", "lan_bind_address", "online_enabled", "extra_patches", "gpu_adapter",
                   "controller_mode", "controller_device", "wheel_enabled", "wheel_name", "wheel_mapping",
-                  "console_language", "dev_menu", "fullscreen")
+                  "console_language", "dev_menu", "fullscreen", "audio_format")
 
     def reset_profile(self) -> None:
+        self.core.data.pop(self.HANDHELD_RESTORE_KEY, None)
         keep = {k: getattr(self.s, k) for k in self.RESET_KEEP}
         self.core.settings = self.s = profile.Settings.from_dict(keep)
         self.core.save()
         self._load_settings_into_ui()
+        self._update_handheld_preset_button()
         self._fill_pads()
         self._update_wheel_label()
         self._fill_patch_list()
@@ -1390,6 +1445,8 @@ class MainWindow(QMainWindow):
                 self, "No updates", "The game has no updates installed (version 1.00). Start anyway?") \
                 != QMessageBox.StandardButton.Yes:
             return
+        if not self._confirm_hardware():
+            return
         if self.core.needs_compile(entry):
             box = QMessageBox(self)
             box.setWindowTitle("First start")
@@ -1399,6 +1456,7 @@ class MainWindow(QMainWindow):
             if box.exec() != QMessageBox.StandardButton.Ok:
                 return
         try:
+            self._proc_log_start_line = len(self.log_view.toPlainText().splitlines())
             self.proc = self.core.launch(entry)
             self._proc_entry = entry
             self._proc_started = __import__("time").time()
@@ -1408,9 +1466,63 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Start", str(e))
         self.refresh()
 
+    def _confirm_hardware(self) -> bool:
+        if self._hardware_warning_shown:
+            return True
+        warnings = self.core.hardware_advisory()
+        if not warnings:
+            return True
+        self._hardware_warning_shown = True
+        output = self.s.output_resolution.split("x")
+        if len(output) == 2 and all(part.isdigit() for part in output):
+            width = int(int(output[0]) * self.s.resolution_scale / 100)
+            height = int(int(output[1]) * self.s.resolution_scale / 100)
+            render_target = f"Current internal target: approximately {width}x{height} ({self.s.resolution_scale}%)."
+        else:
+            render_target = f"Current resolution scale: {self.s.resolution_scale}%."
+        adapters = self.core.gpu_adapters()
+        gpu = ", ".join(adapters) if adapters else "not identified in an RPCS3 log yet"
+        box = QMessageBox(self)
+        box.setWindowTitle("Hardware may struggle with GT6")
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setText("This PC may struggle to run Gran Turismo 6 smoothly.")
+        box.setInformativeText("\n".join(warnings) + f"\nDetected Vulkan GPU: {gpu}\n{render_target}\n\n"
+                               "Lowering the output resolution or internal resolution scale may help. "
+                               "This is an advisory only; you can continue if you want to try.")
+        box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+        box.button(QMessageBox.StandardButton.Yes).setText("Continue")
+        box.button(QMessageBox.StandardButton.Cancel).setText("Cancel")
+        return box.exec() == QMessageBox.StandardButton.Yes
+
+    def _check_external_rpcs3_launch(self) -> None:
+        try:
+            marker = diagnostics.direct_rpcs3_launch_marker()
+        except OSError:
+            return
+        if marker and marker != self._last_direct_rpc_origin:
+            self._last_direct_rpc_origin = marker
+            diagnostics.record_direct_rpcs3_launch(marker)
+            self._append_log(f"[diagnostic] {marker}")
+
     def _poll_proc(self) -> None:
+        self._check_external_rpcs3_launch()
         if self.proc and self.proc.poll() is not None:
-            self._append_log(f"game exited (code {self.proc.returncode})")
+            proc = self.proc
+            self._append_log(f"game exited (code {proc.returncode})")
+            lines = self.log_view.toPlainText().splitlines()
+            start = getattr(self, "_proc_log_start_line", 0)
+            try:
+                if not diagnostics.remember_last_session("\n".join(lines[start:])):
+                    self._append_log("[session log] RPCS3 log could not be snapshotted")
+            except OSError as e:
+                self._append_log(f"[session log] snapshot failed: {e}")
+            if proc.returncode != 0:
+                try:
+                    report = diagnostics.collect_crash(
+                        self._proc_entry, proc, self._proc_started, self.core.rpcs3_path() or "(unknown)")
+                    self._append_log(f"[abnormal exit] diagnostic report saved: {report}")
+                except Exception as e:  # noqa: BLE001
+                    self._append_log(f"[diagnostics failed] could not save crash report: {e}")
             if __import__("time").time() - getattr(self, "_proc_started", 0) > 180:
                 self.core.mark_compiled(self._proc_entry)
             self.proc = None
@@ -1481,6 +1593,17 @@ class WheelWizard(QDialog):
         v = QVBoxLayout(self)
         self.devices_lbl = label("", 9, name="muted")
         v.addWidget(self.devices_lbl)
+        target_row = QHBoxLayout()
+        target_row.addWidget(label("Capture controls from:", 9, name="muted"))
+        self.device_box = QComboBox()
+        self.device_box.setToolTip("Choose the wheel or another input device. Select a different device for separate USB pedals or shifters.")
+        target_row.addWidget(self.device_box, 1)
+        self.refresh_devices_btn = QPushButton("Refresh")
+        self.refresh_devices_btn.clicked.connect(self._rescan_devices)
+        target_row.addWidget(self.refresh_devices_btn)
+        v.addLayout(target_row)
+        self.device_box.currentIndexChanged.connect(self._capture_device_changed)
+        self._refresh_capture_devices()
         self.step_lbl = label("", 9, name="muted")
         v.addWidget(self.step_lbl)
         self.instr = label("", 13, True)
@@ -1508,7 +1631,8 @@ class WheelWizard(QDialog):
         self.timer.start(25)
 
     def _start_step(self) -> None:
-        names = [d["name"] + ("  (wheel)" if d["is_wheel"] else "") for d in self.js.devices]
+        names = [f"{d['name']} ({d['vendor']:04X}:{d['product']:04X}, {d['axes']} axes)"
+                 + ("  (wheel)" if d["is_wheel"] else "") for d in self.js.devices]
         self.devices_lbl.setText("Detected: " + (", ".join(names) or "no controllers - connect your wheel"))
         if self.i >= len(self.STEPS):
             self._finish()
@@ -1523,12 +1647,48 @@ class WheelWizard(QDialog):
         self.settle_until = __import__("time").time() + 0.4
         self.base = None
 
+    def _refresh_capture_devices(self) -> None:
+        selected = self.device_box.currentData() if hasattr(self, "device_box") else None
+        self.device_box.blockSignals(True)
+        self.device_box.clear()
+        self.device_box.addItem("Select a device...", "__select__")
+        ids = set()
+        for d in self.js.devices:
+            tid = d["type_id"]
+            if tid in ids:
+                continue  # RPCS3 also treats devices with the same type ID as one device group.
+            ids.add(tid)
+            self.device_box.addItem(f"{d['name']} ({d['vendor']:04X}:{d['product']:04X})", tid)
+        self.device_box.addItem("Any detected device (advanced)", None)
+        preferred = selected if selected in ids else None
+        if preferred is None:
+            wheels = [d["type_id"] for d in self.js.devices if d["is_wheel"]]
+            if len(set(wheels)) == 1:
+                preferred = wheels[0]
+            elif len(ids) == 1:
+                preferred = next(iter(ids))
+        if preferred is not None:
+            index = self.device_box.findData(preferred)
+            if index >= 0:
+                self.device_box.setCurrentIndex(index)
+        self.device_box.blockSignals(False)
+
+    def _capture_device_changed(self, _index: int) -> None:
+        if hasattr(self, "timer") and self.timer.isActive() and self.i < len(self.STEPS):
+            self._start_step()
+
+    def _rescan_devices(self) -> None:
+        self.js.refresh()
+        self._refresh_capture_devices()
+        self._start_step()
+
     def _poll(self) -> None:
         import time
         if not self.js.devices:
             self._rescan = getattr(self, "_rescan", 0) + 1
             if self._rescan % 40 == 1:  # about once a second (timer runs every 25 ms)
                 self.js.refresh()
+                self._refresh_capture_devices()
             if not self.js.devices:
                 self.devices_lbl.setText("Detected: no controllers - connect your wheel")
                 return
@@ -1540,14 +1700,27 @@ class WheelWizard(QDialog):
                 self.base, self.phase = now, "wait"
             return
         if self.phase == "release":
-            if self.gp.detect_change(self.base, now, self.js.devices, "any") is None:
+            if self.gp.detect_change(self.base, now, self.js.devices, "any",
+                                     allowed_device_type_ids={self.hit_device_type_id}) is None:
                 self.i += 1
                 self._start_step()
             return
         key, _text, kind, _opt = self.STEPS[self.i]
-        hit = self.gp.detect_change(self.base, now, self.js.devices, kind, self.used)
+        exclude = set(self.used)
+        if key in ("throttle", "brake"):
+            other_pedal = self.mapping.get("brake" if key == "throttle" else "throttle")
+            if other_pedal and other_pedal["type"] == "axis":
+                # Combined-pedal wheels expose accelerator and brake on opposite ends of one axis.
+                exclude.discard((other_pedal["device_type_id"], "axis", other_pedal["id"]))
+        selected_device = self.device_box.currentData()
+        if selected_device == "__select__":
+            self.status.setText("Choose the wheel or input device above before calibrating this control.")
+            return
+        allowed = {int(selected_device)} if selected_device is not None else None
+        hit = self.gp.detect_change(self.base, now, self.js.devices, kind, exclude, allowed)
         if not hit:
             return
+        self.hit_device_type_id = hit["device_type_id"]
         m = {"device_type_id": hit["device_type_id"], "type": hit["type"], "id": hit["id"], "hat": hit["hat"],
              "reverse": False}
         if hit["type"] == "axis":
@@ -1562,6 +1735,12 @@ class WheelWizard(QDialog):
         if key == "steering":
             dev = next(d for d in self.js.devices if d["type_id"] == hit["device_type_id"])
             self.wheel_name = dev["name"]
+            if self.device_box.currentData() is None:
+                idx = self.device_box.findData(hit["device_type_id"])
+                if idx >= 0:
+                    self.device_box.blockSignals(True)
+                    self.device_box.setCurrentIndex(idx)
+                    self.device_box.blockSignals(False)
         what = f"{hit['type']} {hit['id']}" + (f" {hit['hat']}" if hit["hat"] else "")
         self.status.setText(f"OK - {what}. Release it...")
         self.phase = "release"
@@ -1580,8 +1759,11 @@ class WheelWizard(QDialog):
             self.i -= 1
             old = self.mapping.pop(self.STEPS[self.i][0], None)
             if old:
-                self.used = {u for u in self.used if not (u[0] == old["device_type_id"] and u[1] == old["type"]
-                                                          and u[2] == old["id"])}
+                self.used = set()
+                for mapped in self.mapping.values():
+                    self.used.add((mapped["device_type_id"], mapped["type"], mapped["id"])
+                                  if mapped["type"] != "hat" else
+                                  (mapped["device_type_id"], "hat", mapped["id"], mapped["hat"]))
             self._start_step()
 
     def _finish(self) -> None:

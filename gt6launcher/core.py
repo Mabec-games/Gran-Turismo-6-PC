@@ -344,6 +344,8 @@ class Core:
             env["MANGOHUD"] = "1"
         if self.settings.use_gamemode and shutil.which("gamemoderun"):
             wrapper = ["gamemoderun"]
+        from . import diagnostics
+        diagnostics.preserve_last_session_rpcs3()
         return rp.boot(entry.image.path, fullscreen=self.settings.fullscreen, extra_env=env, wrapper=wrapper)
 
     def effective_settings(self, tid: str, ver: Optional[str]) -> Settings:
@@ -379,6 +381,45 @@ class Core:
     def memlock_too_low(self) -> bool:
         lim = self.memlock_limit()
         return lim is not None and lim < self.MEMLOCK_WANT
+
+    def hardware_advisory(self) -> list[str]:
+        """Advisory checks only; these never alter settings or prevent a launch."""
+        warnings = []
+        threads = os.cpu_count()
+        if threads is not None and threads < 4:
+            warnings.append(f"Only {threads} logical CPU thread(s) detected; GT6 needs at least a 4-core-class CPU.")
+
+        try:
+            if paths.IS_WINDOWS:
+                import ctypes
+
+                class MemoryStatus(ctypes.Structure):
+                    _fields_ = [("length", ctypes.c_ulong), ("memory_load", ctypes.c_ulong),
+                                ("total_phys", ctypes.c_ulonglong), ("avail_phys", ctypes.c_ulonglong),
+                                ("total_page_file", ctypes.c_ulonglong), ("avail_page_file", ctypes.c_ulonglong),
+                                ("total_virtual", ctypes.c_ulonglong), ("avail_virtual", ctypes.c_ulonglong),
+                                ("avail_extended_virtual", ctypes.c_ulonglong)]
+
+                status = MemoryStatus()
+                status.length = ctypes.sizeof(status)
+                ram_bytes = (status.total_phys if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status))
+                             else 0)
+            else:
+                ram_bytes = os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")
+            ram_gib = ram_bytes / (1024 ** 3)
+            if ram_gib and ram_gib < 16:
+                warnings.append(f"{ram_gib:.1f} GiB RAM detected; 16 GiB is recommended to reduce memory pressure.")
+        except (AttributeError, OSError, ValueError):
+            pass
+
+        weak_gpu_markers = ("gtx 1030", "gt 1030", "gtx 1050", "gtx 1630", "gtx 1650",
+                            "radeon rx 550", "radeon rx 560", "radeon vega 8")
+        for adapter in self.gpu_adapters():
+            normalized = adapter.casefold().replace("geforce", "")
+            if any(marker in normalized for marker in weak_gpu_markers):
+                warnings.append(f"{adapter} is an entry-level GPU for GT6; smooth 1080p gameplay is not assured. "
+                                "Try 720p output and 100% resolution scale.")
+        return warnings
 
     def ensure_rpcs3_windows(self, progress=None) -> str:
         from .rpcs3 import install_windows_rpcs3

@@ -106,12 +106,16 @@ def _xinput_pads() -> list[str]:
     return out
 
 
-# hints RPCS3 sets before SDL_Init (rpcs3/Input/sdl_instance.cpp) - they decide which
-# driver handles a device and therefore its name, which RPCS3 matches exactly
-_SDL_HINTS = ((b"SDL_JOYSTICK_THREAD", b"1"),
-              (b"SDL_JOYSTICK_HIDAPI_PS3_SIXAXIS_DRIVER", b"1"),
-              (b"SDL_JOYSTICK_HIDAPI_PS3", b"1"),
-              (b"SDL_JOYSTICK_HIDAPI_LG4FF", b"0"))
+def _sdl_hints() -> tuple[tuple[bytes, bytes], ...]:
+    """Match RPCS3's platform-specific hints so both processes see the same devices."""
+    hints = [(b"SDL_JOYSTICK_THREAD", b"1")]
+    if paths.IS_WINDOWS:
+        hints.extend(((b"SDL_JOYSTICK_HIDAPI_PS3_SIXAXIS_DRIVER", b"1"),
+                      # Match RPCS3's Windows workaround for Logitech wheel HIDAPI issues.
+                      (b"SDL_JOYSTICK_HIDAPI_LG4FF", b"0")))
+    else:
+        hints.append((b"SDL_JOYSTICK_HIDAPI_PS3", b"1"))
+    return tuple(hints)
 
 
 def _sdl_init(sdl: ctypes.CDLL, flags: int) -> bool:
@@ -119,7 +123,7 @@ def _sdl_init(sdl: ctypes.CDLL, flags: int) -> bool:
     sdl.SDL_SetHint.restype = ctypes.c_bool
     sdl.SDL_Init.argtypes = [ctypes.c_uint32]
     sdl.SDL_Init.restype = ctypes.c_bool
-    for k, v in _SDL_HINTS:
+    for k, v in _sdl_hints():
         sdl.SDL_SetHint(k, v)
     return bool(sdl.SDL_Init(flags))
 
@@ -141,7 +145,7 @@ def _sdl2_init(sdl: ctypes.CDLL, flags: int) -> bool:
     sdl.SDL_SetHint.restype = ctypes.c_int
     sdl.SDL_Init.argtypes = [ctypes.c_uint32]
     sdl.SDL_Init.restype = ctypes.c_int
-    for k, v in _SDL_HINTS:
+    for k, v in _sdl_hints():
         sdl.SDL_SetHint(k, v)
     return sdl.SDL_Init(flags) == 0
 
@@ -438,12 +442,15 @@ HAT_BITS = {1: "up", 2: "right", 4: "down", 8: "left"}
 
 
 def detect_change(base: list[dict], now: list[dict], devices: list[dict], want: str,
-                  exclude: set = frozenset()) -> Optional[dict]:
+                  exclude: set = frozenset(),
+                  allowed_device_type_ids: Optional[set[int]] = None) -> Optional[dict]:
     """Return the first clear input change between two snapshots.
     want: 'axis' (moved > 50 % of the range), 'button' (button/hat pressed), 'any'."""
     best = None
     for di, (b, n) in enumerate(zip(base, now)):
         tid = devices[di]["type_id"]
+        if allowed_device_type_ids is not None and tid not in allowed_device_type_ids:
+            continue
         if want in ("axis", "any"):
             for i, (bv, nv) in enumerate(zip(b["axes"], n["axes"])):
                 if (tid, "axis", i) in exclude:

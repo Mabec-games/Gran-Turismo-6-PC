@@ -115,6 +115,7 @@ class Settings:
     # GT6 binds tiled RSX memory (cellGcmSetTile); without this the race standings/name
     # strip and other HUD text can show coloured noise blocks
     handle_tiled_memory: bool = True
+    audio_format: str = "Stereo"
     audio_time_stretch: bool = True   # smooth audio through short FPS dips (intro/name screen)
     audio_buffer_ms: int = 50
     # controller: auto = first connected gamepad (else keyboard), pad = controller_device,
@@ -238,6 +239,7 @@ def build_custom_config(s: Settings, version: str | None, title_id: str = "") ->
         },
         "Video": video,
         "Audio": {
+            "Audio Format": s.audio_format,
             "Enable Buffering": True,
             "Desired Audio Buffer Duration": s.audio_buffer_ms,
             "Enable Time Stretching": s.audio_time_stretch,

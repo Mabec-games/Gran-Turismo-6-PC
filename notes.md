@@ -145,3 +145,33 @@ Build and run on Windows with the bundled RPCS3, then select an external RPCS3 i
    * Confirmed on Issue #8 (`Fantomas3228`): *"Flickering is gone in this one! And controller is also working! Great job! And also it is not going to disk C now, so every issue is fixed here."*
    * Bumped version to `1.1.3` in `gt6launcher/__init__.py` and `README.md`.
    * Built both `dist/GT6-Launcher-win64.zip` and `dist/GT6-Launcher-x86_64.AppImage` for `v1.1.3`.
+
+## Launcher diagnostics and usability work (2026-11-10)
+
+### Session logging and crash reports
+
+* Added `gt6launcher/diagnostics.py` to snapshot the last completed RPCS3 session before a later launch replaces the live log. The Launcher keeps a stable `logs/last-session/` snapshot and the **Save current logs** button creates a uniquely named `logs/session-<timestamp>/` folder, so saving again does not overwrite earlier saved logs. While a game is running, the button can capture the active session.
+* Abnormal non-zero game exits now create a report containing Launcher version, game title ID/version, CPU, GPU, RAM, RPCS3 path, exit status, duration, process ID, command, operating system, architecture, Python version, data directory, and whether an RPCS3 log snapshot was captured. RPCS3 stdout/stderr are not captured by this report.
+* Hardware details are taken from RPCS3's log where available, with host CPU/RAM fallbacks; the saved crash report and emulator log are intended to make user reports actionable.
+
+### Sound output
+
+* Added a Stereo / Surround 5.1 setting and applied the selected channel count to RPCS3's audio configuration. Six-channel output requires a six-channel audio device and matching OS speaker configuration; this has not been verified on physical 5.1 hardware.
+
+### Wheel setup
+
+* Expanded the wheel calibration wizard with explicit device selection, refresh, vendor/product/axis details, and per-device capture filtering. This is intended to avoid capturing input from the wrong controller when handheld controls, wheels, pedals, or shifters coexist.
+* Calibration now allows throttle and brake to use opposite ends of a shared axis, preserves mappings when stepping backward, and waits/pumps SDL discovery to improve device enumeration across Windows and Linux. The Windows packaging script now gets the SDL library from the bundled RPCS3 build so calibration uses the emulator's SDL version.
+* The changes are designed to leave working USB gamepad detection intact, but G29/Fanatec/handheld device behavior still requires testing on the reported hardware and operating systems.
+
+### Performance guidance, handheld preset, and launch-origin logging
+
+* Added an advisory before game launch for systems with fewer than four detected logical CPU threads, less than 16 GiB RAM, or recognized entry-level GPUs (GT/GTX 1030, GTX 1050, GTX 1630/1650, RX 550/560, Vega 8). It reports the current GPU/internal render target and offers Continue or Cancel. It does not block launch or change settings. These thresholds are initial guidance, not a benchmark or a guarantee of performance.
+* The 800p handheld preset now saves the previous values for the settings it changes. Pressing its button again restores those values; the snapshot is stored with Launcher data and is cleared by Reset to recommended.
+* RPCS3 launch-origin logging distinguishes game boot, GUI opened from the Launcher, Launcher tool operations, and direct RPCS3 starts. The Launcher records direct-start markers in its log and includes the marker history when users save logs. This requires rebuilding the GT6-patched RPCS3 with `08-startup-dialog-steps.diff`; the Launcher alone cannot add a marker to an unpatched emulator.
+
+### NIS investigation and verification status
+
+* NVIDIA Image Scaling was investigated in response to the request, but no NIS implementation is included in this change set. FSR remains the existing output scaler.
+* The launch-origin nested RPCS3 patch was checked against the upstream source, and the Launcher patch passed `git apply --check` against the current working tree. No application build, hardware test, or test suite was run for the 2026-11-10 additions.
+* Changes are still uncommitted in the user's working tree. This environment cannot write to that checkout, so the final change is supplied as a patch/commit bundle for local application.
