@@ -69,7 +69,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Mods": "模组扩展",
         "LAN": "局域联机",
         "Advanced": "高级选项",
-        "Log": "运行日志",
+        "Log": "Log",
 
         # Left panel
         "PC edition  ·  v": "PC 移植版  ·  v",
