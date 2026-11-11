@@ -357,7 +357,7 @@ class MainWindow(QMainWindow):
         self.tabs.tabBar().installEventFilter(self._egg_filter)
 
         # Language switch button in the top-right corner of the tab bar
-        self.lang_btn = QPushButton(i18n.get_language_label(self.s.ui_language))
+        self.lang_btn = QPushButton(i18n.get_switch_button_label(self.s.ui_language))
         self.lang_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.lang_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.lang_btn.setToolTip("Switch language / 切换语言")
@@ -550,24 +550,24 @@ class MainWindow(QMainWindow):
         pads = gamepad.list_gamepads()
         self._loading = True
         self.pad_box.clear()
-        self.pad_box.addItem("Automatic (first gamepad, else keyboard)", ("auto", ""))
+        self.pad_box.addItem(tr("Automatic (first gamepad, else keyboard)"), ("auto", ""))
         for p in pads or []:
             self.pad_box.addItem(p, ("pad", p))
         if self.s.controller_mode == "pad" and self.s.controller_device not in (pads or []):
-            self.pad_box.addItem(f"{self.s.controller_device} (not connected)", ("pad", self.s.controller_device))
-        self.pad_box.addItem("Keyboard", ("keyboard", ""))
+            self.pad_box.addItem(f"{self.s.controller_device} {tr('(not connected)')}", ("pad", self.s.controller_device))
+        self.pad_box.addItem(tr("Keyboard"), ("keyboard", ""))
         want = (self.s.controller_mode, self.s.controller_device if self.s.controller_mode == "pad" else "")
         for i in range(self.pad_box.count()):
             if tuple(self.pad_box.itemData(i)) == want:
                 self.pad_box.setCurrentIndex(i)
         self._loading = False
         if pads is None:
-            self.pad_lbl.setText("Gamepad detection unavailable (SDL3 library not found).")
+            self.pad_lbl.setText(tr("Gamepad detection unavailable (SDL3 library not found)."))
         elif not pads:
-            self.pad_lbl.setText("No gamepad connected. Connect it (8BitDo: X-input mode) and click Refresh."
-                                 if paths.IS_WINDOWS else "No gamepad connected.")
+            self.pad_lbl.setText(tr("No gamepad connected. Connect it (8BitDo: X-input mode) and click Refresh.")
+                                 if paths.IS_WINDOWS else tr("No gamepad connected."))
         else:
-            self.pad_lbl.setText(f"Connected: {', '.join(pads)}" if pads else "No gamepad connected.")
+            self.pad_lbl.setText(f"{tr('Connected:')} {', '.join(pads)}" if pads else tr("No gamepad connected."))
 
     def _on_pad_changed(self, _i) -> None:
         if self._loading:
@@ -580,9 +580,9 @@ class MainWindow(QMainWindow):
         m = self.s.wheel_mapping or {}
         if m.get("steering"):
             n = len([k for k in m if m[k]])
-            self.wheel_lbl.setText(f"Set up: {self.s.wheel_name or 'wheel'} ({n} controls mapped)")
+            self.wheel_lbl.setText(f"{tr('Set up:')} {self.s.wheel_name or 'wheel'} ({n} controls mapped)")
         else:
-            self.wheel_lbl.setText("Not set up yet.")
+            self.wheel_lbl.setText(tr("Not set up yet."))
         self._loading = True
         self.wheel_chk.setChecked(bool(self.s.wheel_enabled and m.get("steering")))
         self._loading = False
@@ -1028,21 +1028,22 @@ class MainWindow(QMainWindow):
                     w.setProperty("orig_text", txt)
 
     def _cycle_language(self) -> None:
-        next_code, next_label = i18n.next_language(self.s.ui_language)
+        next_code, _ = i18n.next_language(self.s.ui_language)
         self.s.ui_language = next_code
         i18n.set_current_language(next_code)
-        self.lang_btn.setText(next_label)
+        self.lang_btn.setText(i18n.get_switch_button_label(next_code))
         self._save_soon()
         self._retranslate_ui()
 
     def _lang_label(self, code: str) -> str:
-        return i18n.get_language_label(code)
+        return i18n.get_switch_button_label(code)
 
     def _retranslate_ui(self) -> None:
         lang = self.s.ui_language
         i18n.set_current_language(lang)
         if hasattr(self, "lang_btn"):
-            self.lang_btn.setText(i18n.get_language_label(lang))
+            self.lang_btn.setText(i18n.get_switch_button_label(lang))
+            self.lang_btn.setToolTip("Switch to English" if lang == "zh_CN" else "切换至简体中文")
 
         # Re-translate group boxes
         for gb in self.findChildren(QGroupBox):
@@ -1050,7 +1051,7 @@ class MainWindow(QMainWindow):
             if orig:
                 gb.setTitle(i18n.tr(orig, lang))
 
-        # Re-translate buttons and checkboxes
+        # Re-translate buttons and checkboxes (excluding easter egg button)
         for typ in (QPushButton, QCheckBox):
             for btn in self.findChildren(typ):
                 if btn is getattr(self, "lang_btn", None) or btn is getattr(self, "egg_btn", None):
@@ -1078,6 +1079,8 @@ class MainWindow(QMainWindow):
         if hasattr(self, "play_btn") and self.job is None and self.proc is None:
             self.play_btn.setText(i18n.tr("PLAY", lang))
 
+        self._fill_pads()
+        self._update_wheel_label()
         self.refresh()
 
     def _save_soon(self) -> None:
@@ -1121,19 +1124,19 @@ class MainWindow(QMainWindow):
     def _update_hints(self) -> None:
         hints = []
         if self.s.aa == "off" and self.s.resolution_scale < 200:
-            hints.append("No post AA: use 200% or more resolution, otherwise edges will shimmer.")
+            hints.append(tr("No post AA: use 200% or more resolution, otherwise edges will shimmer."))
         if self.s.resolution_scale > 100 and self.s.motion_blur.startswith("gameplay"):
-            hints.append("Known issue: motion blur can flash green/magenta above 100% resolution.")
+            hints.append(tr("Known issue: motion blur can flash green/magenta above 100% resolution."))
         entry = self.current()
         cb, blit = profile.render_flags(self.s, entry.installed if entry else None)
         if cb and self.s.resolution_scale >= 250:
-            hints.append("Heavy: 250-300% with color buffers (needed on 1.22) can drop FPS and make the audio "
-                         "crackle. 100-150% is recommended for a steady 60 FPS.")
+            hints.append(tr("Heavy: 250-300% with color buffers (needed on 1.22) can drop FPS and make the audio "
+                            "crackle. 100-150% is recommended for a steady 60 FPS."))
         if cb and self.s.resolution_scale > 100:
-            hints.append("Color buffers are on (1.06+): resolution scaling relies on AlexHaust's res-scale fix "
-                         "patches (enabled automatically); the game renders 1440x1080 internally at 100%.")
+            hints.append(tr("Color buffers are on (1.06+): resolution scaling relies on AlexHaust's res-scale fix "
+                            "patches (enabled automatically); the game renders 1440x1080 internally at 100%."))
         if self.s.aspect != "16:9":
-            hints.append("Ultrawide: 3D view is widened, HUD and menus stay 16:9.")
+            hints.append(tr("Ultrawide: 3D view is widened, HUD and menus stay 16:9."))
         self.gfx_hint.setText("\n".join(hints))
         self.ctl["cas_sharpening"].setEnabled(self.s.upscaler == "fsr")
 

@@ -35,6 +35,12 @@ def next_language(current_code: str) -> tuple[str, str]:
     return LANGUAGES[idx][0], LANGUAGES[idx][1]
 
 
+def get_switch_button_label(current_code: str) -> str:
+    """Returns the label of the NEXT language so users know where to click to switch."""
+    next_code, next_label = next_language(current_code)
+    return next_label
+
+
 def get_language_label(code: str) -> str:
     for c, label, _ in LANGUAGES:
         if c == code:
@@ -44,6 +50,8 @@ def get_language_label(code: str) -> str:
 
 def tr(text: str, lang: Optional[str] = None) -> str:
     """Translates a string into the target language (defaults to current)."""
+    if not text:
+        return text
     target = lang or _CURRENT_LANG
     if target == "en":
         return text
@@ -115,33 +123,72 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Select your decrypted GT6 ISO file.": "请选择已解密的《GT赛车6》ISO 镜像文件。",
         "Target version": "目标版本",
         "Download & install updates": "下载并安装更新",
+        "Download && install updates": "下载并安装更新",
         "Gamepad mode": "手柄输入模式",
         "Automatic (first connected gamepad)": "自动 (首选已连接手柄)",
+        "Automatic (first gamepad, else keyboard)": "自动 (首选手柄，否则键盘)",
         "Keyboard only": "仅键盘操作",
+        "Keyboard": "键盘",
         "Manual (configured in RPCS3)": "手动 (在 RPCS3 中配置)",
         "Racing wheel": "力回馈方向盘",
+        "Use racing wheel": "使用力回馈方向盘",
         "Enable wheel (emulates Logitech G27)": "启用方向盘 (模拟罗技 G27)",
+        "Set up wheel...": "配置方向盘...",
         "Configure wheel...": "配置方向盘向导...",
+        "Not set up yet.": "尚未配置。",
+        "No gamepad connected.": "未检测到连接的手柄。",
+        "No gamepad connected. Connect it (8BitDo: X-input mode) and click Refresh.": "未检测到手柄。请连接手柄（8BitDo 请设为 X-input 模式）并点击刷新。",
+        "Gamepad detection unavailable (SDL3 library not found).": "手柄检测不可用（未找到 SDL3 运行库）。",
+        "Connected:": "已连接：",
+        "Player 1": "1P 玩家控制器",
+        "Console language": "游戏主机语言",
+        "Automatic (from the disc region)": "自动 (根据光盘区域决定)",
+        "Parallel downloads": "并行下载线程数",
+        "Delete update packages after installing (saves ~10 GB)": "安装完成后自动删除更新包 (节省约 10 GB 空间)",
+
+        # Setup Descriptions
+        "The emulated PS3's region always matches the disc (EU disc = European console), so the game starts with the right defaults. The language also sets the game text on the multi-language EU disc. In-game settings worth changing once (stored in your save): Options -> Display -> Display Size (HD) = 100 removes the black border; Options -> Global -> Units for km/h / mph.":
+            "模拟的 PS3 主机区域始终与光盘版本匹配（欧版光盘对应欧洲主机），游戏启动时会自动采用正确的默认设置。此设置同时决定多语言欧版光盘的文本语言。游戏中推荐修改一次的设置（保存在存档中）：选项 -> 显示 -> 显示尺寸 (HD) 设为 100 可消除黑边；选项 -> 全局 -> 单位 可切换 km/h 与 mph。",
+        "Automatic uses the first detected gamepad (Xbox, PlayStation, 8BitDo, Switch Pro ...) with standard button mapping; if none is detected, the current RPCS3 input setting is kept. Choose Keyboard explicitly to switch to keyboard input. Racing-game style triggers (RT accelerate, LT brake): in the game, Options -> Wireless Controller.":
+            "自动模式会优先使用检测到的首个手柄（Xbox、PlayStation、8BitDo、Switch Pro 等）并应用标准键位映射；若未检测到手柄，则保持 RPCS3 当前输入配置。明确选择“键盘”可强制切换为键盘操作。赛车游戏主流扳机键（RT 油门、LT 刹车）：可在游戏内“选项 -> 无线控制器”中设置。",
+        "Any wheel (Logitech, Thrustmaster, Fanatec, Moza ...) works: the game sees it as a Logitech G27, which GT6 supports natively, including force feedback. The set-up asks you to turn the wheel and press each pedal/button once.":
+            "支持各类力回馈方向盘（罗技、图马思特、Fanatec、魔爪等）：游戏原生将其识别为罗技 G27 并完美支持力回馈。配置向导仅需约 30 秒（转动方向盘并依次踩下踏板与按键即可完成校准）。",
+        "Updates are installed in order (1.02 -> 1.22, 1.01 is skipped), downloads resume and every package is SHA-1 checked. After installing, start the game once so it can unpack its update data - only then install mods.":
+            "游戏更新包将按序安装（1.02 -> 1.22，跳过 1.01），支持断点续传且每个安装包均经过 SHA-1 校验。安装完成后，请先启动一次游戏以便其解压更新数据——之后再安装模组。",
 
         # Graphics Tab Buttons & Controls
+        "Resolution": "内部渲染分辨率",
         "Output resolution": "输出分辨率",
         "Resolution scale": "内部渲染倍率",
+        "Anti-aliasing": "抗锯齿模式",
+        "Output scaling": "输出缩放模式",
+        "FSR sharpening": "FSR 锐化强度",
+        "Anisotropic filter": "各向异性过滤",
         "Aspect ratio": "画面显示比例",
-        "Frame rate": "帧率限制与垂直同步",
+        "PS3 output": "PS3 输出分辨率",
+        "Shadows": "阴影质量",
+        "Motion blur": "动态模糊效果",
+        "Depth of field": "景深虚化效果",
+        "Lamp glare (1 = stock)": "路灯眩光倍率 (1 为原生)",
+        "Frame rate": "目标帧率与垂直同步",
         "FidelityFX CAS sharpening": "FidelityFX CAS 画面锐化",
         "Anti-aliasing (MLAA)": "抗锯齿 (MLAA)",
-        "Motion blur": "动态模糊",
-        "Depth of field": "景深虚化",
-        "Shadow quality": "阴影质量",
+        "Shadow quality": "阴影画质",
         "Street lamp glare": "路灯眩光",
+        "Fullscreen": "全屏模式运行",
+        "Show RPCS3 performance overlay": "显示 RPCS3 性能与帧率浮层",
         "60 FPS in Gallery / new-car screens (Unlock FPS patch)": "展厅/购车界面 60 FPS (Unlock FPS 补丁)",
-        "Cockpit vertical FOV": "驾驶舱垂直视角",
-        "Hood vertical FOV": "车前盖垂直视角",
-        "Roof vertical FOV": "车顶垂直视角",
-        "Chase vertical FOV": "第三人称追尾垂直视角",
+        "Bumper vertical FOV": "保险杠视角垂直 FOV",
+        "Cockpit vertical FOV": "驾驶舱视角垂直 FOV",
+        "Roof/Hood vertical FOV": "车顶/车盖视角垂直 FOV",
+        "Chase vertical FOV": "第三人称追尾垂直 FOV",
         "Reset to recommended": "恢复默认推荐设置",
         "Restore previous graphics settings": "恢复之前的画面设置",
         "Handheld 800p preset (Steam Deck / 1280x800)": "掌机 800p 预设 (Steam Deck / 1280x800)",
+        "Apply the 800p handheld graphics preset. Press again to restore the graphics settings you had before.":
+            "应用 800p 掌机画面预设。再次点击可恢复之前的画面设置。",
+        "GT6 runs its simulation at 60 Hz, so above 60 FPS the game would run too fast. 60 FPS that holds steady matters more for racing.":
+            "《GT赛车6》物理模拟固定为 60 Hz，超过 60 FPS 游戏会异常加速。对于赛车游戏而言，稳定不掉帧的 60 FPS 至关重要。",
 
         # Advanced Tab
         "GPU": "显卡 (GPU)",
@@ -155,36 +202,66 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Operating System": "操作系统默认 (OS)",
         "RPCS3 Scheduler": "RPCS3 专属调度器",
         "Performance overlay": "性能监控浮层",
-        "Asynchronous texture streaming": "异步纹理流式加载",
-        "Z-Cull occlusion queries": "禁用 Z-Cull 遮挡查询",
+        "Disable ZCull occlusion queries": "禁用 ZCull 遮挡查询",
+        "Accurate RSX reservation access": "精确 RSX 预留访问",
         "Multithreaded RSX": "多线程 RSX",
-        "Accurate RSX reservations": "精确 RSX 预留",
-        "Handle tiled memory": "处理平铺显存 (Tiled Memory)",
-        "Console language": "游戏主机语言",
-        "Developer menu (Develop Settings)": "开发者调试菜单 (Develop Settings)",
-        "System tools (Linux)": "系统增强工具 (Linux)",
-        "Use GameMode (feralinteractive)": "启用 GameMode 游戏加速",
-        "Use MangoHud overlay": "启用 MangoHud 监控浮层",
+        "Handle RSX memory tiling": "处理 RSX 平铺显存",
+        "Asynchronous texture streaming": "异步纹理流式加载",
+        "Audio time stretching": "音频时间拉伸",
+        "Feral GameMode": "Feral GameMode 游戏加速",
+        "MangoHud overlay": "MangoHud 硬件监控浮层",
         "Reset RPCS3 to recommended": "重置 RPCS3 为推荐设置",
+        "Fixes reward-screen slowdowns and Garage car-image softlocks; may crackle audio in bumper cam.":
+            "修复结算奖励画面卡顿和车库缩略图卡死问题；保险杠视角下可能偶尔有杂音。",
+        "Fewer RSX desyncs (recommended).": "减少 RSX 显卡不同步现象（推荐开启）。",
+        "Causes vertex explosions on cars in GT6 - keep off.": "会导致 GT6 车辆出现尖锐黑色破面多边形爆炸——请保持关闭。",
+        "Fixes coloured noise over driver names / HUD text in races (recommended).": "修复比赛中车手名字及仪表 HUD 文本上的彩色花屏杂点（推荐开启）。",
+        "Smoother audio when the game slows down.": "在游戏发生短期掉帧时让音频播放更平滑。",
 
         # Tools & Danger Zone Buttons
+        "Open launcher data folder": "打开启动器数据目录",
+        "Open emulator log (for bug reports)": "打开模拟器日志 (用于反馈问题)",
+        "Reset game data (removes installed updates and mods, keeps saves)": "重置游戏数据 (清除已安装更新及模组，保留存档)",
         "Open RPCS3 directory": "打开 RPCS3 所在目录",
         "Open RPCS3 GUI": "打开 RPCS3 主界面",
         "Open GT6 save folder": "打开 GT6 存档文件夹",
         "Open shaders cache": "打开着色器缓存目录",
         "Clear shaders cache": "清空着色器缓存",
-        "Install Spec II career mod": "安装 Spec II 生涯模组",
-        "Uninstall Spec II mod": "卸载 Spec II 模组",
-        "Download Spec II mod": "下载 Spec II 模组包",
+        "- Stuck at the Sony Computer Entertainment logo: delete GT6's save data (RPCS3 -> Manage -> Save Data).\n- Black 3D world on 1.06+: Render path must use color buffers (Automatic does this).\n- Garage softlock while updating car pictures: keep 'Disable ZCull occlusion queries' on.\n- Spiky black car bodies: turn Multithreaded RSX off.\n- First start of a version takes minutes (PPU/SPU caches compile) - later starts are fast.":
+            "- 卡在索尼电脑娱乐 (SCE) 标志界面：请删除 GT6 存档数据 (RPCS3 -> Manage -> Save Data)。\n- 1.06+ 版本 3D 画面全黑：渲染路径必须开启颜色缓冲 (自动模式已默认开启)。\n- 更新车辆照片时车库死锁卡住：保持“禁用 ZCull 遮挡查询”开启。\n- 车辆模型出现尖刺黑块爆炸：请关闭“多线程 RSX”。\n- 每次新版本首次启动需要编译 PPU/SPU 缓存（约数分钟），后续启动将非常迅速。",
+
+        # Mods Tab
+        "Download from GTPlanet": "前往 GTPlanet 网页下载",
+        "Import archive...": "导入模组压缩包...",
+        "Install Spec II + Career mod": "安装 Spec II + 生涯模组",
+        "Uninstall all mods (restore original)": "卸载全部模组 (还原纯净版)",
+        "By Lunard, based on Spec II Beta 7 (Nenkai, TheAdmiester), with features from Strato mod (Emivebe) and Performance mod (Plunke). Requires game version 1.22.":
+            "作者 Lunard，基于 Spec II Beta 7（Nenkai、TheAdmiester 开发），融合 Strato 模组与性能模组特性。需要游戏版本为 1.22。",
+        "Every file a mod overwrites is backed up, so uninstalling restores the game exactly. Start a new save when you first use the Career mod.":
+            "模组替换的所有原版文件均会自动备份，卸载时将无损精准还原。首次使用生涯模组时请务必开启全新游戏存档。",
+        "Enable GT6's developer menu (credits, cars) - game version 1.22":
+            "启用 GT6 原生开发者菜单 (刷钱、刷车) - 需游戏版本 1.22",
+        "In the game, at My Home: hold R1 and press SELECT (your pad: hold RB, press the View/Back button; keyboard: hold E, then hold Space ~1 s).\n- Cashier: move the slider to the amount you want (steps of Cr. 100,000) and press Exec - this SETS your credits to that amount.\n- Garage: add cars at random.\nSave afterwards. Never use Misc -> Delete Save Data in that menu. Not for online play.\nWhile on, the race pause menu also shows the developer-only 'Force finish' button; its label reads 'caption_FORCE_FINISH' because the game has no text for it.":
+            "在游戏主界面“我的家 (My Home)”中：按住 R1 并按 SELECT（Xbox 手柄：按住 RB 并按 View/Back 键；键盘：按住 E 并按住空格约 1 秒）。\n- Cashier (收银台)：滑动滑块选择想要的金额（以 100,000 Cr. 为步长）并按 Exec 执行——直接将资金设为该金额。\n- Garage (车库)：随机添加车辆到车库。\n修改后请保存游戏。切勿点击该菜单内的 Misc -> Delete Save Data。不可用于线上联机。\n开启后，比赛暂停菜单还会出现开发者专用的“强制完赛”按钮（显示为 caption_FORCE_FINISH）。",
 
         # LAN Tab
-        "Network mode": "联机网络模式",
-        "Enable LAN mode (local network / VPN)": "启用局域网对战 (本地网络 / VPN)",
-        "Enable online mode (RPCN community server)": "启用线上联机 (RPCN 社区服务器)",
-        "IP address": "本机 IP 地址",
-        "PSID": "控制台 PSID",
-        "RPCN Account": "RPCN 账号状态",
-        "Open RPCS3 network settings": "打开 RPCS3 网络设置",
+        "Enable LAN play (boots with 'lanmode', no PSN needed)": "启用局域网联机对战 (附带 lanmode 参数启动，无需 PSN)",
+        "Status": "联机状态",
+        "Player name": "玩家昵称",
+        "New PSID": "生成新 PSID",
+        "Console PSID": "控制台 PSID",
+        "Bind address": "绑定网卡地址",
+        "This PC": "本机 IP 地址",
+        "Enable online via the community GT6 server (irekej patch)": "启用线上联机 (通过 irekej 社区服务器补丁)",
+        "Uses the community 'irekej' GT6 server through the RPCN network. Enter your RPCN account below (stored like RPCS3 does: the password is only kept as a hash). LAN mode takes priority when both are ticked.":
+            "通过 RPCN 网络连接 irekej 社区 GT6 服务器。在下方输入您的 RPCN 账号（密码仅以哈希值加密存储）。两项同时勾选时局域网模式优先。",
+        "RPCN user": "RPCN 用户名",
+        "Password": "密码",
+        "Token": "验证令牌 (Token)",
+        "Save RPCN login": "保存 RPCN 登录凭据",
+        "Ticked = applied at boot. Patches driven by the Graphics/LAN tabs are ticked automatically; ticking or unticking here overrides them.":
+            "勾选项在游戏启动时自动生效。画面与局域网页面所选的补丁已自动勾选；在此手动更改将覆盖默认设置。",
+        "Update patch databases": "更新补丁数据库",
         "Ready for": "就绪：",
         "Not available": "不可用：",
 
