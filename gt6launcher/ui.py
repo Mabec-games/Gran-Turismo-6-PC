@@ -8,8 +8,12 @@ import threading
 import traceback
 from typing import Callable, Optional
 
-from PySide6.QtCore import QObject, QRectF, Qt, QThread, QTimer, QUrl, Signal, Slot
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QIcon, QImage, QLinearGradient, QPainter
+from PySide6.QtCore import (
+    QEasingCurve, QEvent, QObject, QPoint, QPropertyAnimation, QRectF, Qt, QThread, QTimer, QUrl, Signal, Slot
+)
+from PySide6.QtGui import (
+    QColor, QDesktopServices, QFont, QIcon, QImage, QLinearGradient, QMovie, QPainter
+)
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QGroupBox,
     QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPlainTextEdit,
@@ -184,6 +188,115 @@ class Job(QObject):
             self.failed.emit(f"{e}")
 
 
+# --------------------------------------------------------------------------- easter egg
+
+
+def play_sound(wav_path: str):
+    """Play a short sound effect asynchronously across Windows, Linux, and macOS."""
+    import shutil
+    if sys.platform == "win32":
+        try:
+            import winsound
+            winsound.PlaySound(wav_path, winsound.SND_FILENAME | winsound.SND_ASYNC)
+            return
+        except Exception:
+            pass
+    for cmd in ("pw-play", "paplay", "aplay", "ffplay", "mpv", "afplay"):
+        if shutil.which(cmd):
+            try:
+                args = [cmd]
+                if cmd == "ffplay":
+                    args += ["-nodisp", "-autoexit", "-loglevel", "quiet"]
+                elif cmd == "mpv":
+                    args += ["--no-video"]
+                args.append(wav_path)
+                return subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception:
+                pass
+
+
+class EasterEggOverlay(QWidget):
+    """Pop-up animated character with transparent alpha background."""
+
+    def __init__(self, parent: QWidget, webp_path: str, wav_path: str, on_finished: Optional[Callable[[], None]] = None):
+        super().__init__(parent)
+        self._on_finished = on_finished
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setStyleSheet("background: transparent;")
+
+        self.lbl = QLabel(self)
+        self.lbl.setStyleSheet("background: transparent;")
+        self.lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.movie = QMovie(webp_path)
+        self.lbl.setMovie(self.movie)
+
+        w, h = 360, 300
+        self.resize(w, h)
+        self.lbl.resize(w, h)
+
+        parent_w = parent.width()
+        parent_h = parent.height()
+        target_x = max(0, parent_w - w - 16)
+        target_y = max(0, parent_h - h - 10)
+        start_y = parent_h + 10
+
+        self.move(target_x, start_y)
+        self.show()
+        self.raise_()
+
+        # Spring pop-up from bottom
+        self._anim = QPropertyAnimation(self, b"pos")
+        self._anim.setDuration(280)
+        self._anim.setStartValue(QPoint(target_x, start_y))
+        self._anim.setEndValue(QPoint(target_x, target_y))
+        self._anim.setEasingCurve(QEasingCurve.Type.OutBack)
+
+        play_sound(wav_path)
+        self.movie.start()
+        self._anim.start()
+
+        # Auto-dismiss smoothly when audio/video finishes (~4.5s)
+        QTimer.singleShot(4200, self._slide_down)
+
+    def _slide_down(self) -> None:
+        target_x = self.x()
+        start_y = self.y()
+        end_y = self.parentWidget().height() + 10
+        self._anim_down = QPropertyAnimation(self, b"pos")
+        self._anim_down.setDuration(320)
+        self._anim_down.setStartValue(QPoint(target_x, start_y))
+        self._anim_down.setEndValue(QPoint(target_x, end_y))
+        self._anim_down.setEasingCurve(QEasingCurve.Type.InCubic)
+        self._anim_down.finished.connect(self._cleanup)
+        self._anim_down.start()
+
+    def _cleanup(self) -> None:
+        self.movie.stop()
+        if self._on_finished:
+            self._on_finished()
+        self.deleteLater()
+
+
+class _TabBarEasterEggFilter(QObject):
+    def __init__(self, win: "MainWindow"):
+        super().__init__(win)
+        self.win = win
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
+            bar = self.win.tabs.tabBar()
+            idx = self.win.tabs.count() - 1
+            if idx >= 0:
+                rect = bar.tabRect(idx)
+                pos = event.pos()
+                if rect.right() < pos.x() <= rect.right() + 45 and rect.top() <= pos.y() <= rect.bottom():
+                    self.win._play_easter_egg()
+                    return True
+        return super().eventFilter(obj, event)
+
+
 # --------------------------------------------------------------------------- main window
 
 class MainWindow(QMainWindow):
@@ -220,6 +333,17 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(scroll(self._build_advanced()), "Advanced")
         self.tabs.addTab(self._build_log(), "Log")
         root.addWidget(self.tabs, 6)
+
+        # Hidden easter egg button right after the Log tab
+        self._egg_overlay: Optional[EasterEggOverlay] = None
+        self.egg_btn = QPushButton("", self.tabs.tabBar())
+        self.egg_btn.setFixedSize(36, 28)
+        self.egg_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.egg_btn.setStyleSheet("background: transparent; border: none;")
+        self.egg_btn.setCursor(Qt.CursorShape.ArrowCursor)
+        self.egg_btn.clicked.connect(self._play_easter_egg)
+        self._egg_filter = _TabBarEasterEggFilter(self)
+        self.tabs.tabBar().installEventFilter(self._egg_filter)
 
         self._logsig_holder = _LogBridge()
         self._logsig_holder.line.connect(self._append_log)
@@ -1553,6 +1677,28 @@ class MainWindow(QMainWindow):
                 self.thread.wait(3000)
         super().closeEvent(e)
 
+    def _update_egg_btn_pos(self) -> None:
+        if hasattr(self, "egg_btn") and hasattr(self, "tabs"):
+            bar = self.tabs.tabBar()
+            idx = self.tabs.count() - 1
+            if idx >= 0:
+                rect = bar.tabRect(idx)
+                self.egg_btn.move(rect.right() + 2, rect.top() + max(0, (rect.height() - 28) // 2))
+                self.egg_btn.raise_()
+
+    def _play_easter_egg(self) -> None:
+        if getattr(self, "_egg_overlay", None) is not None:
+            return
+        webp = paths.resource("easteregg/dingdong.webp")
+        wav = paths.resource("easteregg/dingdong.wav")
+        if not os.path.exists(webp) or not os.path.exists(wav):
+            return
+
+        def done():
+            self._egg_overlay = None
+
+        self._egg_overlay = EasterEggOverlay(self, webp, wav, on_finished=done)
+
 
 class WheelWizard(QDialog):
     """Records a wheel mapping: one control at a time, by moving/pressing it."""
@@ -1812,6 +1958,7 @@ def _track_tabs_edge(win: "MainWindow") -> None:
     if edge != bg.visible_right:
         bg.visible_right = edge
         bg.update()
+    win._update_egg_btn_pos()
 
 
 def main() -> int:
