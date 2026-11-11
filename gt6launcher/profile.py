@@ -14,6 +14,8 @@ Sources for the defaults:
 from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict, fields
+import os
+import sys
 from typing import Any
 
 # --------------------------------------------------------------------------- choices
@@ -80,6 +82,48 @@ SPU_BLOCK = ["Safe", "Mega", "Giga"]
 SCHEDULERS = ["Operating System", "RPCS3 Scheduler", "RPCS3 Alternative Scheduler"]
 
 
+def detect_system_ram_gb() -> float:
+    """Detect total system physical RAM in GiB across Linux and Windows."""
+    try:
+        if sys.platform == "win32":
+            import ctypes
+
+            class MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("sullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+
+            stat = MEMORYSTATUSEX()
+            stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+                return stat.ullTotalPhys / (1024 ** 3)
+        elif hasattr(os, "sysconf"):
+            if "SC_PAGE_SIZE" in os.sysconf_names and "SC_PHYS_PAGES" in os.sysconf_names:
+                return (os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")) / (1024 ** 3)
+    except Exception:
+        pass
+    return 16.0
+
+
+def default_spu_block_size() -> str:
+    """Select best SPU Block Size based on total system RAM.
+
+    - Under 8 GB RAM (e.g. 4-6 GB): 'Safe' to prevent compiler memory pressure / OOM-killer.
+    - 8 GB RAM and above: 'Mega' for optimal performance and thread stability in GT6.
+    (Note: 'Giga' is never auto-selected as it causes thread deadlocks and audio desyncs in GT6).
+    """
+    ram = detect_system_ram_gb()
+    return "Safe" if ram < 7.0 else "Mega"
+
+
 @dataclass
 class Settings:
     # display
@@ -105,7 +149,7 @@ class Settings:
     # emulation
     renderer: str = "Vulkan"
     gpu_adapter: str = ""            # empty = RPCS3 default
-    spu_block_size: str = "Safe"
+    spu_block_size: str = field(default_factory=default_spu_block_size)
     thread_scheduler: str = "Operating System"
     zcull_queries_disabled: bool = True
     render_path: str = "auto"       # never all three of WCB/RCB/CPU blit together (RPCS3 wiki)

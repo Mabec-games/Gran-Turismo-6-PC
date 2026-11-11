@@ -57,7 +57,7 @@ class Core:
             self.rpcs3_path()
         self._migrate()
 
-    PROFILE_REV = 4
+    PROFILE_REV = 5
 
     def _migrate(self) -> None:
         rev = int(self.data.get("profile_rev", 1))
@@ -80,6 +80,11 @@ class Core:
                     os.unlink(os.path.join(base, rel))
                 except OSError:
                     pass
+        if rev < 5 and "profile" in self.data:
+            # rev 5: upgrade spu_block_size from old "Safe" default to RAM-aware choice
+            if self.data.get("profile", {}).get("spu_block_size") == "Safe":
+                from .profile import default_spu_block_size
+                self.settings.spu_block_size = default_spu_block_size()
         if rev != self.PROFILE_REV:
             self.data["profile_rev"] = self.PROFILE_REV
             self.save()

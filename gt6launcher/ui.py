@@ -562,10 +562,16 @@ class MainWindow(QMainWindow):
         f.addRow("Audio output", self.ctl["audio_format"])
         self.ctl["render_path"] = self._combo(profile.RENDER_PATHS, "render_path")
         f.addRow("Render path", self.ctl["render_path"])
+        ram_gb = profile.detect_system_ram_gb()
+        ram_hint = f"Detected {ram_gb:.0f} GB RAM ({'Mega' if ram_gb >= 7.0 else 'Safe'} recommended). Changing recompiles SPU cache."
         self.ctl["spu_block_size"] = self._combo(profile.SPU_BLOCK, "spu_block_size")
-        self.ctl["spu_block_size"].setToolTip("Changing this recompiles all SPU code on the next start (several minutes).")
+        self.ctl["spu_block_size"].setToolTip(
+            "Mega provides optimal performance and frame pacing for GT6 on systems with >= 8 GB RAM.\n"
+            "Safe uses less compiler memory for systems under 8 GB RAM.\n"
+            "Giga can cause thread deadlocks and audio desyncs in GT6."
+        )
         f.addRow("SPU block size", self.ctl["spu_block_size"])
-        f.addRow("", label("Changing SPU block size triggers a full SPU recompile on the next start.", 9, name="muted"))
+        f.addRow("", label(ram_hint, 9, name="muted"))
         self.ctl["thread_scheduler"] = self._combo(profile.SCHEDULERS, "thread_scheduler")
         f.addRow("Thread scheduler", self.ctl["thread_scheduler"])
         for key, txt, tip in (
