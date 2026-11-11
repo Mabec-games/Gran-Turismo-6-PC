@@ -681,8 +681,13 @@ class MainWindow(QMainWindow):
         g = QGroupBox("Emulation")
         f = QFormLayout(g)
         self.ctl["gpu_adapter"] = QComboBox()
-        self.ctl["gpu_adapter"].currentIndexChanged.connect(lambda _i: self._set("gpu_adapter", self.ctl["gpu_adapter"].currentData() or ""))
+        self.ctl["gpu_adapter"].currentIndexChanged.connect(self._on_gpu_adapter_changed)
         f.addRow("GPU", self.ctl["gpu_adapter"])
+        self.gpu_vram_warn = QLabel()
+        self.gpu_vram_warn.setWordWrap(True)
+        self.gpu_vram_warn.setVisible(False)
+        restyle(self.gpu_vram_warn, "warn")
+        f.addRow("", self.gpu_vram_warn)
         self.ctl["audio_format"] = self._combo(
             {"Stereo": "Stereo (2.0)", "Surround 5.1": "Surround 5.1"}, "audio_format")
         self.ctl["audio_format"].setToolTip(
@@ -959,6 +964,31 @@ class MainWindow(QMainWindow):
                    "resolution_scale", "lan_enabled", "online_enabled", "dev_menu") or key.startswith("fov_"):
             self._fill_patch_list()
 
+    def _on_gpu_adapter_changed(self, _i: int = 0) -> None:
+        if self._loading:
+            return
+        adapter = self.ctl["gpu_adapter"].currentData() or ""
+        self._set("gpu_adapter", adapter)
+        self._update_gpu_warning(adapter)
+
+    def _update_gpu_warning(self, adapter: str) -> None:
+        if not hasattr(self, "gpu_vram_warn"):
+            return
+        effective = adapter
+        if not effective:
+            adapters = self.core.gpu_adapters()
+            effective = adapters[0] if adapters else ""
+        if not effective:
+            self.gpu_vram_warn.setVisible(False)
+            return
+
+        is_low, msg = self.core.check_gpu_low_vram(effective)
+        if is_low and msg:
+            self.gpu_vram_warn.setText(f"⚠ {msg}")
+            self.gpu_vram_warn.setVisible(True)
+        else:
+            self.gpu_vram_warn.setVisible(False)
+
     def _save_soon(self) -> None:
         """Coalesce rapid changes (slider drags) into one settings write."""
         t = getattr(self, "_save_timer", None)
@@ -1165,6 +1195,7 @@ class MainWindow(QMainWindow):
             gp.addItem(a, a)
         gp.setCurrentIndex(max(gp.findData(self.s.gpu_adapter), 0))
         self._loading = False
+        self._update_gpu_warning(self.s.gpu_adapter)
 
         # left status
         if not entry:

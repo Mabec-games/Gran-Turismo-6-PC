@@ -420,11 +420,75 @@ class Core:
         weak_gpu_markers = ("gtx 1030", "gt 1030", "gtx 1050", "gtx 1630", "gtx 1650",
                             "radeon rx 550", "radeon rx 560", "radeon vega 8")
         for adapter in self.gpu_adapters():
-            normalized = adapter.casefold().replace("geforce", "")
-            if any(marker in normalized for marker in weak_gpu_markers):
-                warnings.append(f"{adapter} is an entry-level GPU for GT6; smooth 1080p gameplay is not assured. "
-                                "Try 720p output and 100% resolution scale.")
+            is_low, msg = self.check_gpu_low_vram(adapter)
+            if is_low and msg:
+                warnings.append(f"{adapter}: {msg}")
         return warnings
+
+    def check_gpu_low_vram(self, adapter: str) -> tuple[bool, str]:
+        """Returns (is_low_vram, advisory_message) for a given GPU adapter name."""
+        if not adapter:
+            return False, ""
+
+        name = adapter.lower()
+
+        # 1. Integrated graphics (shared memory / very low dedicated VRAM)
+        is_intel_igpu = "intel" in name and any(
+            x in name for x in ("uhd", "hd graphics", "iris", "graphics", "integrated")
+        ) and "arc" not in name
+
+        is_amd_igpu = any(
+            x in name for x in (
+                "vega 3", "vega 6", "vega 7", "vega 8", "vega 11",
+                "radeon 660m", "radeon 680m", "radeon 740m", "radeon 760m", "radeon 780m",
+            )
+        ) or (
+            "radeon" in name
+            and ("graphics" in name or "apu" in name)
+            and not any(x in name for x in ("rx ", "pro ", "vii", "vega 56", "vega 64", "rdna", "gfx1", "gfx90", "xt"))
+        )
+
+        is_sw_or_other_igpu = any(x in name for x in ("apple m", "llvmpipe", "microsoft basic", "swiftshader"))
+
+        if is_intel_igpu or is_amd_igpu or is_sw_or_other_igpu:
+            return True, (
+                "Integrated GPU detected (shared VRAM). A dedicated GPU with 6+ GB VRAM "
+                "is recommended for GT6 to avoid stuttering."
+            )
+
+        # 2. Explicit VRAM markers in device name (e.g., '4GB', '3GB', '2GB', '1GB')
+        m = re.search(r"\b([1-4])\s*gb\b", name)
+        if m:
+            vram_num = m.group(1)
+            return True, (
+                f"Low VRAM GPU detected ({vram_num} GB). 6+ GB VRAM is recommended for GT6. "
+                "Higher resolutions (1080p+ / 1440p) may stutter or run out of memory."
+            )
+
+        # 3. Known low-VRAM (< 6 GB) dedicated GPUs
+        low_vram_models = (
+            # NVIDIA
+            "gt 1030", "gtx 1030", "gt 710", "gt 730", "gt 640", "gt 740",
+            "gtx 750", "gtx 760", "gtx 770", "gtx 780",
+            "gtx 950", "gtx 960", "gtx 970", "gtx 980",
+            "gtx 1050", "gtx 1060 3gb",
+            "gtx 1630", "gtx 1650",
+            "rtx 3050 4gb", "rtx 2050",
+            # AMD
+            "rx 550", "rx 560", "rx 460",
+            "rx 6400", "rx 6500",
+            "r7 2", "r7 3", "r9 270", "r9 280", "r9 285", "r9 370", "r9 380",
+            # Intel Arc
+            "arc a310", "arc a380",
+        )
+        normalized = name.replace("geforce", "").replace("radeon", "")
+        if any(marker in name or marker in normalized for marker in low_vram_models):
+            return True, (
+                "Low VRAM GPU detected (< 6 GB). 6+ GB VRAM is recommended for GT6. "
+                "Keep resolution scale at 100% (720p/1080p) to avoid stuttering."
+            )
+
+        return False, ""
 
     def ensure_rpcs3_windows(self, progress=None) -> str:
         from .rpcs3 import install_windows_rpcs3
