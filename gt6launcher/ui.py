@@ -343,7 +343,7 @@ class MainWindow(QMainWindow):
         self.egg_btn.setFixedSize(120, 32)
         self.egg_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.egg_btn.setStyleSheet("background: transparent; border: none;")
-        self.egg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.egg_btn.setCursor(Qt.CursorShape.ArrowCursor)
         self.egg_btn.clicked.connect(self._play_easter_egg)
         self._egg_filter = _TabsEasterEggFilter(self)
         self.tabs.installEventFilter(self._egg_filter)
