@@ -279,7 +279,7 @@ class EasterEggOverlay(QWidget):
         self.deleteLater()
 
 
-class _TabBarEasterEggFilter(QObject):
+class _TabsEasterEggFilter(QObject):
     def __init__(self, win: "MainWindow"):
         super().__init__(win)
         self.win = win
@@ -287,11 +287,14 @@ class _TabBarEasterEggFilter(QObject):
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
             bar = self.win.tabs.tabBar()
-            idx = self.win.tabs.count() - 1
-            if idx >= 0:
-                rect = bar.tabRect(idx)
-                pos = event.pos()
-                if rect.right() < pos.x() <= rect.right() + 45 and rect.top() <= pos.y() <= rect.bottom():
+            pos = event.pos()
+            if obj is bar:
+                idx = bar.count() - 1
+                if idx >= 0 and pos.x() > bar.tabRect(idx).right():
+                    self.win._play_easter_egg()
+                    return True
+            elif obj is self.win.tabs:
+                if 0 <= pos.y() <= bar.height() + 8 and pos.x() >= bar.width():
                     self.win._play_easter_egg()
                     return True
         return super().eventFilter(obj, event)
@@ -334,15 +337,16 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self._build_log(), "Log")
         root.addWidget(self.tabs, 6)
 
-        # Hidden easter egg button right after the Log tab
+        # Hidden easter egg button right after the Log tab (generous 120px wide invisible target)
         self._egg_overlay: Optional[EasterEggOverlay] = None
-        self.egg_btn = QPushButton("", self.tabs.tabBar())
-        self.egg_btn.setFixedSize(36, 28)
+        self.egg_btn = QPushButton("", self.tabs)
+        self.egg_btn.setFixedSize(120, 32)
         self.egg_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.egg_btn.setStyleSheet("background: transparent; border: none;")
-        self.egg_btn.setCursor(Qt.CursorShape.ArrowCursor)
+        self.egg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.egg_btn.clicked.connect(self._play_easter_egg)
-        self._egg_filter = _TabBarEasterEggFilter(self)
+        self._egg_filter = _TabsEasterEggFilter(self)
+        self.tabs.installEventFilter(self._egg_filter)
         self.tabs.tabBar().installEventFilter(self._egg_filter)
 
         self._logsig_holder = _LogBridge()
@@ -1683,7 +1687,9 @@ class MainWindow(QMainWindow):
             idx = self.tabs.count() - 1
             if idx >= 0:
                 rect = bar.tabRect(idx)
-                self.egg_btn.move(rect.right() + 2, rect.top() + max(0, (rect.height() - 28) // 2))
+                bar_pos = bar.pos()
+                self.egg_btn.move(bar_pos.x() + rect.right() + 2, bar_pos.y() + rect.top())
+                self.egg_btn.show()
                 self.egg_btn.raise_()
 
     def _play_easter_egg(self) -> None:
