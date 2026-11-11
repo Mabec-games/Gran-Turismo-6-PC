@@ -173,6 +173,8 @@ class Settings:
     # extras
     use_gamemode: bool = False
     use_mangohud: bool = False
+    # UI language for launcher
+    ui_language: str = "en"
     # console region/language: region follows the disc; GT6 picks default units (km/h vs mph)
     # and the EU disc its text language from these
     console_language: str = "auto"

@@ -20,13 +20,14 @@ from PySide6.QtWidgets import (
     QProgressBar, QPushButton, QScrollArea, QSlider, QSpinBox, QSplitter, QTabWidget, QVBoxLayout, QWidget,
 )
 
-from . import diagnostics, lan, mods, patches, paths, profile, updates
+from . import diagnostics, i18n, lan, mods, patches, paths, profile, updates
 from .core import Core, GT6_TITLES
+from .i18n import tr
 from .rpcs3 import RPCS3, STOCK_BUILD_WARNING, installed_version, is_patched_build
 
 ACCENT = "#e0157a"
 STYLE = f"""
-* {{ color: #e9e9ee; font-size: 10pt; }}
+* {{ color: #e9e9ee; font-size: 10pt; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans CN", "PingFang SC", sans-serif; }}
 QMainWindow, QDialog, QMessageBox {{ background: #0b0b10; }}
 QTabWidget::pane {{ border: 1px solid rgba(255,255,255,0.08); background: rgba(10,10,14,0.86); border-radius: 8px; top: -1px; }}
 QTabBar::tab {{ background: transparent; padding: 9px 15px; color: #9a9aa6; border: none; font-weight: 600; }}
@@ -288,13 +289,19 @@ class _TabsEasterEggFilter(QObject):
         if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
             bar = self.win.tabs.tabBar()
             pos = event.pos()
+            corner_w = self.win.lang_btn.width() if hasattr(self.win, "lang_btn") else 110
             if obj is bar:
                 idx = bar.count() - 1
-                if idx >= 0 and pos.x() > bar.tabRect(idx).right():
-                    self.win._play_easter_egg()
-                    return True
+                if idx >= 0:
+                    tab_right = bar.tabRect(idx).right()
+                    # Trigger in the empty bar area between last tab and language button
+                    if tab_right < pos.x() < bar.width() - corner_w - 6:
+                        self.win._play_easter_egg()
+                        return True
             elif obj is self.win.tabs:
-                if 0 <= pos.y() <= bar.height() + 8 and pos.x() >= bar.width():
+                idx = bar.count() - 1
+                tab_right = bar.tabRect(idx).right() if idx >= 0 else 0
+                if 0 <= pos.y() <= bar.height() + 8 and tab_right < pos.x() < self.win.tabs.width() - corner_w - 12:
                     self.win._play_easter_egg()
                     return True
         return super().eventFilter(obj, event)
@@ -337,10 +344,10 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self._build_log(), "Log")
         root.addWidget(self.tabs, 6)
 
-        # Hidden easter egg button right after the Log tab (generous 120px wide invisible target)
+        # Hidden easter egg button in empty space between Log tab and language corner button
         self._egg_overlay: Optional[EasterEggOverlay] = None
         self.egg_btn = QPushButton("", self.tabs)
-        self.egg_btn.setFixedSize(120, 32)
+        self.egg_btn.setFixedSize(90, 32)
         self.egg_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.egg_btn.setStyleSheet("background: transparent; border: none;")
         self.egg_btn.setCursor(Qt.CursorShape.ArrowCursor)
@@ -348,6 +355,19 @@ class MainWindow(QMainWindow):
         self._egg_filter = _TabsEasterEggFilter(self)
         self.tabs.installEventFilter(self._egg_filter)
         self.tabs.tabBar().installEventFilter(self._egg_filter)
+
+        # Language switch button in the top-right corner of the tab bar
+        self.lang_btn = QPushButton(i18n.get_language_label(self.s.ui_language))
+        self.lang_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.lang_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.lang_btn.setToolTip("Switch language / 切换语言")
+        self.lang_btn.setStyleSheet(
+            "QPushButton { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); "
+            "border-radius: 6px; padding: 4px 10px; font-weight: 600; font-size: 9pt; color: #d6d6e2; margin-right: 6px; margin-top: 3px; } "
+            "QPushButton:hover { background: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.28); color: white; }"
+        )
+        self.lang_btn.clicked.connect(self._cycle_language)
+        self.tabs.setCornerWidget(self.lang_btn, Qt.Corner.TopRightCorner)
 
         self._logsig_holder = _LogBridge()
         self._logsig_holder.line.connect(self._append_log)
@@ -360,7 +380,11 @@ class MainWindow(QMainWindow):
         self._load_settings_into_ui()
         self._fill_pads()
         self._update_wheel_label()
-        self.refresh()
+        self._record_original_texts()
+        if self.s.ui_language != "en":
+            self._retranslate_ui()
+        else:
+            self.refresh()
         self.poll = QTimer(self)
         self.poll.timeout.connect(self._poll_proc)
         self.poll.start(1000)
@@ -374,7 +398,8 @@ class MainWindow(QMainWindow):
         v.setContentsMargins(0, 0, 0, 0)
         v.addWidget(label("GRAN TURISMO 6", 26, True))
         from . import __version__
-        v.addWidget(label(f"PC edition  ·  v{__version__}", 11, False, "muted"))
+        self.version_lbl = label(f"{tr('PC edition  ·  v')}{__version__}", 11, False, "muted")
+        v.addWidget(self.version_lbl)
         v.addStretch(1)
         self.game_box = QComboBox()
         self.game_box.currentIndexChanged.connect(self._on_game_changed)
@@ -989,6 +1014,72 @@ class MainWindow(QMainWindow):
         else:
             self.gpu_vram_warn.setVisible(False)
 
+    def _record_original_texts(self) -> None:
+        """Stores the original English text for all UI elements so translation is lossless."""
+        for gb in self.findChildren(QGroupBox):
+            if not gb.property("orig_text"):
+                gb.setProperty("orig_text", gb.title())
+        for typ in (QPushButton, QCheckBox, QLabel):
+            for w in self.findChildren(typ):
+                if w is getattr(self, "lang_btn", None) or w is getattr(self, "egg_btn", None):
+                    continue
+                txt = w.text()
+                if txt and not w.property("orig_text"):
+                    w.setProperty("orig_text", txt)
+
+    def _cycle_language(self) -> None:
+        next_code, next_label = i18n.next_language(self.s.ui_language)
+        self.s.ui_language = next_code
+        i18n.set_current_language(next_code)
+        self.lang_btn.setText(next_label)
+        self._save_soon()
+        self._retranslate_ui()
+
+    def _lang_label(self, code: str) -> str:
+        return i18n.get_language_label(code)
+
+    def _retranslate_ui(self) -> None:
+        lang = self.s.ui_language
+        i18n.set_current_language(lang)
+        if hasattr(self, "lang_btn"):
+            self.lang_btn.setText(i18n.get_language_label(lang))
+
+        # Re-translate group boxes
+        for gb in self.findChildren(QGroupBox):
+            orig = gb.property("orig_text")
+            if orig:
+                gb.setTitle(i18n.tr(orig, lang))
+
+        # Re-translate buttons and checkboxes
+        for typ in (QPushButton, QCheckBox):
+            for btn in self.findChildren(typ):
+                if btn is getattr(self, "lang_btn", None) or btn is getattr(self, "egg_btn", None):
+                    continue
+                orig = btn.property("orig_text")
+                if orig:
+                    btn.setText(i18n.tr(orig, lang))
+
+        # Re-translate static labels
+        for lbl in self.findChildren(QLabel):
+            orig = lbl.property("orig_text")
+            if orig:
+                lbl.setText(i18n.tr(orig, lang))
+
+        # Tab titles
+        tab_keys = ["Setup", "Graphics", "Patches", "Mods", "LAN", "Advanced", "Log"]
+        for idx, key in enumerate(tab_keys):
+            if idx < self.tabs.count():
+                self.tabs.setTabText(idx, i18n.tr(key, lang))
+
+        # Subheader and Play button
+        from . import __version__
+        if hasattr(self, "version_lbl"):
+            self.version_lbl.setText(f"{i18n.tr('PC edition  ·  v', lang)}{__version__}")
+        if hasattr(self, "play_btn") and self.job is None and self.proc is None:
+            self.play_btn.setText(i18n.tr("PLAY", lang))
+
+        self.refresh()
+
     def _save_soon(self) -> None:
         """Coalesce rapid changes (slider drags) into one settings write."""
         t = getattr(self, "_save_timer", None)
@@ -1070,12 +1161,12 @@ class MainWindow(QMainWindow):
         if hasattr(self, "handheld_preset_btn"):
             active = bool(self.core.data.get(self.HANDHELD_RESTORE_KEY))
             self.handheld_preset_btn.setText(
-                "Restore previous graphics settings" if active else "Handheld 800p preset (Steam Deck / 1280x800)")
+                tr("Restore previous graphics settings") if active else tr("Handheld 800p preset (Steam Deck / 1280x800)"))
 
     # settings that 'Reset to recommended' (graphics / emulation) must not touch
     RESET_KEEP = ("lan_enabled", "lan_bind_address", "online_enabled", "extra_patches", "gpu_adapter",
                   "controller_mode", "controller_device", "wheel_enabled", "wheel_name", "wheel_mapping",
-                  "console_language", "dev_menu", "fullscreen", "audio_format")
+                  "console_language", "ui_language", "dev_menu", "fullscreen", "audio_format")
 
     def reset_profile(self) -> None:
         self.core.data.pop(self.HANDHELD_RESTORE_KEY, None)
@@ -1109,20 +1200,20 @@ class MainWindow(QMainWindow):
         if rp_path:
             self.build_lbl.setText("" if is_patched_build(rp_path) else STOCK_BUILD_WARNING)
         else:
-            self.build_lbl.setText("Emulator component missing - reinstall the launcher." if not paths.IS_WINDOWS
-                                   else "Preparing the emulator component...")
+            self.build_lbl.setText(tr("Emulator component missing - reinstall the launcher.") if not paths.IS_WINDOWS
+                                   else tr("Preparing the emulator component..."))
         fw_ok = bool(rp_path) and RPCS3(rp_path).firmware_installed()
         if fw_ok:
-            self.fw_lbl.setText(f"Installed (version {RPCS3(rp_path).firmware_version() or '?'})")
+            self.fw_lbl.setText(f"{tr('Installed')} (version {RPCS3(rp_path).firmware_version() or '?'})")
             restyle(self.fw_lbl, "ok")
-            self.fw_btn.setText("Reinstall firmware")
+            self.fw_btn.setText(tr("Reinstall firmware"))
             restyle(self.fw_btn, "")
         else:
-            self.fw_lbl.setText("Not installed")
+            self.fw_lbl.setText(tr("Not installed"))
             restyle(self.fw_lbl, "warn")
-            self.fw_btn.setText("Install firmware")
+            self.fw_btn.setText(tr("Install firmware"))
             restyle(self.fw_btn, "accent")
-        self.games_lbl.setText(wrap_path("\n".join(f"{g.label}: {g.image.path}" for g in games)) or "No game added yet.")
+        self.games_lbl.setText(wrap_path("\n".join(f"{g.label}: {g.image.path}" for g in games)) or tr("No game added yet."))
         restyle(self.games_lbl, "ok" if games else "warn")
 
         # updates
@@ -1199,7 +1290,7 @@ class MainWindow(QMainWindow):
 
         # left status
         if not entry:
-            st = "Add your Gran Turismo 6 disc image in Setup."
+            st = tr("Add your Gran Turismo 6 disc image in Setup.")
         else:
             st = (f"{entry.image.title}  -  {GT6_TITLES.get(entry.title_id, '')}\n"
                   f"Version {entry.installed or '01.00 (no updates)'}")
@@ -1212,7 +1303,7 @@ class MainWindow(QMainWindow):
         ready = bool(entry) and fw_ok and bool(rp_path)
         busy = self.job is not None
         self.play_btn.setEnabled(ready and not busy and self.proc is None)
-        self.play_btn.setText("RUNNING" if self.proc else "PLAY")
+        self.play_btn.setText(tr("RUNNING") if self.proc else tr("PLAY"))
         self._fill_patch_list()
 
     def _on_game_changed(self, _i) -> None:
