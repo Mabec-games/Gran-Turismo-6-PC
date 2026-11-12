@@ -14,7 +14,6 @@ import ctypes
 import ctypes.util
 import glob
 import os
-import shutil
 import sys
 from typing import Optional
 
@@ -22,6 +21,8 @@ from . import paths
 from .yamlio import atomic_write, dump_cfg, load_cfg
 
 SDL_INIT_GAMEPAD = 0x00002000
+SDL_INIT_JOYSTICK = 0x00000200
+SDL_JOYSTICK_TYPE_WHEEL = 2
 
 
 def _load_sdl3() -> Optional[ctypes.CDLL]:
@@ -176,9 +177,11 @@ def _sdl2_pump(sdl: ctypes.CDLL, rounds: int = 8) -> None:
 
 
 HANDHELD_CONTROLLER_NAMES = (
-    "steam deck", "rog ally", "ally x", "ally", "legion go", "legion",
-    "claw", "msi claw", "gpd", "ayaneo", "onexplayer", "aokzoe", "strix halo", "handheld",
+    "steam deck", "steam virtual gamepad", "rog ally", "legion go", "legion controller", "msi claw",
+    "claw controller", "gpd win", "ayaneo", "onexplayer", "aokzoe", "zotac zone", "handheld",
 )
+WHEEL_NAME_HINTS = ("wheel", "g923", "g29", "g920", "g27", "g25", "thrustmaster", "fanatec", "moza",
+                    "simucube", "cammus", "logitech driving force", "pedal", "shifter")
 
 
 def is_handheld_controller(name: str) -> bool:
@@ -187,20 +190,76 @@ def is_handheld_controller(name: str) -> bool:
     return any(h in name_l for h in HANDHELD_CONTROLLER_NAMES)
 
 
+def is_wheel_name(name: str) -> bool:
+    name_l = name.lower()
+    return any(w in name_l for w in WHEEL_NAME_HINTS)
+
+
+SYNTH_MARKER = "# --- GT6 Launcher: synthesized handheld mappings (kept across updates) ---"
+
+
 def ensure_gamecontrollerdb() -> str:
-    """Ensure gamecontrollerdb.txt with handheld and modern controller mappings exists in RPCS3 settings."""
+    """Install the bundled SDL_GameControllerDB as <rpcs3 config>/input_configs/gamecontrollerdb.txt
+    (RPCS3 loads it from there, "Load SDL GameController Mappings" is on by default).
+
+    The file is rewritten whenever the bundled copy changes; mappings the launcher synthesized for
+    unrecognised handheld controllers (below SYNTH_MARKER) are preserved."""
     target_dir = os.path.join(paths.rpcs3_settings_dir(), "input_configs")
     target_path = os.path.join(target_dir, "gamecontrollerdb.txt")
     source_path = paths.resource("gamecontrollerdb.txt")
     try:
-        os.makedirs(target_dir, exist_ok=True)
         if os.path.isfile(source_path):
-            if not os.path.isfile(target_path) or os.path.getsize(target_path) < os.path.getsize(source_path):
-                shutil.copy2(source_path, target_path)
+            with open(source_path, "r", encoding="utf-8", errors="replace") as f:
+                bundled = f.read().rstrip("\n") + "\n"
+            current = ""
+            if os.path.isfile(target_path):
+                with open(target_path, "r", encoding="utf-8", errors="replace") as f:
+                    current = f.read()
+            synth = current.split(SYNTH_MARKER, 1)[1].strip("\n") if SYNTH_MARKER in current else ""
+            wanted = bundled + (f"\n{SYNTH_MARKER}\n{synth}\n" if synth else "")
+            if current != wanted:
+                os.makedirs(target_dir, exist_ok=True)
+                atomic_write(target_path, wanted)
     except Exception:
         pass
     os.environ["SDL_GAMECONTROLLERCONFIG_FILE"] = target_path
     return target_path
+
+
+def _synth_mapping(guid: str, name: str, axes: int, hats: int, buttons: int) -> Optional[str]:
+    """Xbox-360-layout mapping for a handheld that SDL does not recognise (Linux xpad/XInput order).
+    Wheels and anything that is not a named handheld are never turned into gamepads: a wheel mapped
+    as a pad would become Player 1 in 'Automatic' mode and send its axes twice (pad + G27)."""
+    if not guid or not is_handheld_controller(name) or is_wheel_name(name) or axes < 4 or buttons < 8:
+        return None
+    clean = name.replace(",", " ").strip() or "Handheld Controller"
+    parts = [guid, clean, "a:b0", "b:b1", "x:b2", "y:b3", "leftshoulder:b4", "rightshoulder:b5",
+             "back:b6", "start:b7", "leftx:a0", "lefty:a1"]
+    if buttons >= 11:
+        parts += ["guide:b8", "leftstick:b9", "rightstick:b10"]
+    if axes >= 6:
+        parts += ["lefttrigger:a2", "rightx:a3", "righty:a4", "righttrigger:a5"]
+    else:
+        parts += ["rightx:a2", "righty:a3"]
+    if hats >= 1:
+        parts += ["dpup:h0.1", "dpright:h0.2", "dpdown:h0.4", "dpleft:h0.8"]
+    parts.append(f"platform:{'Windows' if paths.IS_WINDOWS else 'Linux'}")
+    return ",".join(parts) + ","
+
+
+def _remember_synth(db: str, mapping: str) -> None:
+    """Persist a synthesized mapping once (so RPCS3 sees the same pad), never duplicating a GUID."""
+    guid = mapping.split(",", 1)[0]
+    try:
+        with open(db, "r", encoding="utf-8", errors="replace") as f:
+            text = f.read()
+        if any(line.startswith(guid + ",") for line in text.splitlines()):
+            return
+        if SYNTH_MARKER not in text:
+            text = text.rstrip("\n") + f"\n\n{SYNTH_MARKER}\n"
+        atomic_write(db, text.rstrip("\n") + "\n" + mapping + "\n")
+    except Exception:
+        pass
 
 
 def list_gamepads() -> Optional[list[str]]:
@@ -240,8 +299,9 @@ def _sdl_gamepads() -> Optional[list[str]]:
             sdl.SDL_AddGamepadMappingsFromFile(db.encode("utf-8"))
         _sdl_pump(sdl)
 
-        # Detect any unmapped handheld or standard joysticks and synthesize gamepad mappings
-        if hasattr(sdl, "SDL_GetJoysticks") and hasattr(sdl, "SDL_IsGamepad") and hasattr(sdl, "SDL_AddGamepadMapping"):
+        # Unrecognised handheld controllers (never wheels): synthesize an Xbox-layout mapping
+        if all(hasattr(sdl, fn) for fn in ("SDL_GetJoysticks", "SDL_IsGamepad", "SDL_AddGamepadMapping",
+                                           "SDL_GetJoystickGUID", "SDL_GUIDToString")):
             try:
                 sdl.SDL_GetJoysticks.argtypes = [ctypes.POINTER(ctypes.c_int)]
                 sdl.SDL_GetJoysticks.restype = ctypes.POINTER(ctypes.c_uint32)
@@ -252,15 +312,21 @@ def _sdl_gamepads() -> Optional[list[str]]:
                 sdl.SDL_CloseJoystick.argtypes = [ctypes.c_void_p]
                 sdl.SDL_GetJoystickName.argtypes = [ctypes.c_void_p]
                 sdl.SDL_GetJoystickName.restype = ctypes.c_char_p
+                sdl.SDL_GetJoystickType.argtypes = [ctypes.c_void_p]
+                sdl.SDL_GetJoystickType.restype = ctypes.c_int
                 sdl.SDL_GetNumJoystickAxes.argtypes = [ctypes.c_void_p]
                 sdl.SDL_GetNumJoystickAxes.restype = ctypes.c_int
+                sdl.SDL_GetNumJoystickHats.argtypes = [ctypes.c_void_p]
+                sdl.SDL_GetNumJoystickHats.restype = ctypes.c_int
                 sdl.SDL_GetNumJoystickButtons.argtypes = [ctypes.c_void_p]
                 sdl.SDL_GetNumJoystickButtons.restype = ctypes.c_int
+
                 class _GUID3(ctypes.Structure):
                     _fields_ = [("data", ctypes.c_uint8 * 16)]
                 sdl.SDL_GetJoystickGUID.argtypes = [ctypes.c_void_p]
                 sdl.SDL_GetJoystickGUID.restype = _GUID3
                 sdl.SDL_GUIDToString.argtypes = [_GUID3, ctypes.c_char_p, ctypes.c_int]
+                sdl.SDL_GUIDToString.restype = None
                 sdl.SDL_AddGamepadMapping.argtypes = [ctypes.c_char_p]
                 sdl.SDL_AddGamepadMapping.restype = ctypes.c_int
 
@@ -268,31 +334,25 @@ def _sdl_gamepads() -> Optional[list[str]]:
                 j_ids = sdl.SDL_GetJoysticks(ctypes.byref(j_count))
                 for j_idx in range(j_count.value):
                     jid = j_ids[j_idx]
-                    if not sdl.SDL_IsGamepad(jid):
-                        jh = sdl.SDL_OpenJoystick(jid)
-                        if jh:
-                            try:
-                                n_axes = sdl.SDL_GetNumJoystickAxes(jh)
-                                n_btns = sdl.SDL_GetNumJoystickButtons(jh)
-                                raw_name = sdl.SDL_GetJoystickName(jh)
-                                j_name = raw_name.decode("utf-8", "replace") if raw_name else "Gamepad"
-                                if is_handheld_controller(j_name) or (n_axes >= 4 and n_btns >= 8):
-                                    guid_obj = sdl.SDL_GetJoystickGUID(jh)
-                                    buf = ctypes.create_string_buffer(64)
-                                    sdl.SDL_GUIDToString(guid_obj, buf, 64)
-                                    guid_str = buf.value.decode("utf-8", "replace")
-                                    if guid_str:
-                                        plat = "Windows" if paths.IS_WINDOWS else "Linux"
-                                        synth = f"{guid_str},{j_name},a:b0,b:b1,x:b2,y:b3,back:b6,start:b7,guide:b8,leftstick:b9,rightstick:b10,leftshoulder:b4,rightshoulder:b5,dpup:h0.1,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,leftx:a0,lefty:a1,rightx:a3,righty:a4,lefttrigger:a2,righttrigger:a5,platform:{plat},"
-                                        sdl.SDL_AddGamepadMapping(synth.encode("utf-8"))
-                                        if os.path.isfile(db):
-                                            try:
-                                                with open(db, "a", encoding="utf-8") as f:
-                                                    f.write("\n" + synth + "\n")
-                                            except Exception:
-                                                pass
-                            finally:
-                                sdl.SDL_CloseJoystick(jh)
+                    if sdl.SDL_IsGamepad(jid):
+                        continue
+                    jh = sdl.SDL_OpenJoystick(jid)
+                    if not jh:
+                        continue
+                    try:
+                        if sdl.SDL_GetJoystickType(jh) == SDL_JOYSTICK_TYPE_WHEEL:
+                            continue
+                        raw_name = sdl.SDL_GetJoystickName(jh)
+                        j_name = raw_name.decode("utf-8", "replace") if raw_name else ""
+                        buf = ctypes.create_string_buffer(64)
+                        sdl.SDL_GUIDToString(sdl.SDL_GetJoystickGUID(jh), buf, 64)
+                        synth = _synth_mapping(buf.value.decode("ascii", "replace"), j_name,
+                                               sdl.SDL_GetNumJoystickAxes(jh), sdl.SDL_GetNumJoystickHats(jh),
+                                               sdl.SDL_GetNumJoystickButtons(jh))
+                        if synth and sdl.SDL_AddGamepadMapping(synth.encode("utf-8")) >= 0:
+                            _remember_synth(db, synth)
+                    finally:
+                        sdl.SDL_CloseJoystick(jh)
                 if j_ids:
                     sdl.SDL_free(j_ids)
             except Exception:
@@ -312,7 +372,7 @@ def _sdl_gamepads() -> Optional[list[str]]:
         return out
     finally:
         sdl.SDL_QuitSubSystem.argtypes = [ctypes.c_uint32]
-        sdl.SDL_QuitSubSystem(SDL_INIT_GAMEPAD)
+        sdl.SDL_QuitSubSystem(SDL_INIT_GAMEPAD | SDL_INIT_JOYSTICK)
 
 
 def _sdl2_gamepads() -> Optional[list[str]]:
@@ -342,51 +402,51 @@ def _sdl2_gamepads() -> Optional[list[str]]:
                 sdl.SDL_GameControllerAddMappingsFromRW(rw, 1)
         _sdl2_pump(sdl)
 
-        # Detect any unmapped handheld or standard joysticks and synthesize controller mappings
-        if hasattr(sdl, "SDL_JoystickOpen") and hasattr(sdl, "SDL_JoystickGetGUID") and hasattr(sdl, "SDL_GameControllerAddMapping"):
+        # Unrecognised handheld controllers (never wheels): synthesize an Xbox-layout mapping
+        if all(hasattr(sdl, fn) for fn in ("SDL_JoystickOpen", "SDL_JoystickGetGUID",
+                                           "SDL_JoystickGetGUIDString", "SDL_GameControllerAddMapping")):
             try:
                 sdl.SDL_JoystickOpen.argtypes = [ctypes.c_int]
                 sdl.SDL_JoystickOpen.restype = ctypes.c_void_p
                 sdl.SDL_JoystickClose.argtypes = [ctypes.c_void_p]
+                sdl.SDL_JoystickGetType.argtypes = [ctypes.c_void_p]
+                sdl.SDL_JoystickGetType.restype = ctypes.c_int
                 sdl.SDL_JoystickNumAxes.argtypes = [ctypes.c_void_p]
                 sdl.SDL_JoystickNumAxes.restype = ctypes.c_int
+                sdl.SDL_JoystickNumHats.argtypes = [ctypes.c_void_p]
+                sdl.SDL_JoystickNumHats.restype = ctypes.c_int
                 sdl.SDL_JoystickNumButtons.argtypes = [ctypes.c_void_p]
                 sdl.SDL_JoystickNumButtons.restype = ctypes.c_int
+
                 class _GUID2(ctypes.Structure):
                     _fields_ = [("data", ctypes.c_uint8 * 16)]
                 sdl.SDL_JoystickGetGUID.argtypes = [ctypes.c_void_p]
                 sdl.SDL_JoystickGetGUID.restype = _GUID2
                 sdl.SDL_JoystickGetGUIDString.argtypes = [_GUID2, ctypes.c_char_p, ctypes.c_int]
+                sdl.SDL_JoystickGetGUIDString.restype = None
                 sdl.SDL_GameControllerAddMapping.argtypes = [ctypes.c_char_p]
                 sdl.SDL_GameControllerAddMapping.restype = ctypes.c_int
 
-                num_j = sdl.SDL_NumJoysticks()
-                for i in range(num_j):
-                    if not sdl.SDL_IsGameController(i):
-                        jh = sdl.SDL_JoystickOpen(i)
-                        if jh:
-                            try:
-                                n_axes = sdl.SDL_JoystickNumAxes(jh)
-                                n_btns = sdl.SDL_JoystickNumButtons(jh)
-                                raw_name = sdl.SDL_JoystickNameForIndex(i)
-                                j_name = raw_name.decode("utf-8", "replace") if raw_name else "Gamepad"
-                                if is_handheld_controller(j_name) or (n_axes >= 4 and n_btns >= 8):
-                                    guid_obj = sdl.SDL_JoystickGetGUID(jh)
-                                    buf = ctypes.create_string_buffer(64)
-                                    sdl.SDL_JoystickGetGUIDString(guid_obj, buf, 64)
-                                    guid_str = buf.value.decode("utf-8", "replace")
-                                    if guid_str:
-                                        plat = "Windows" if paths.IS_WINDOWS else "Linux"
-                                        synth = f"{guid_str},{j_name},a:b0,b:b1,x:b2,y:b3,back:b6,start:b7,guide:b8,leftstick:b9,rightstick:b10,leftshoulder:b4,rightshoulder:b5,dpup:h0.1,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,leftx:a0,lefty:a1,rightx:a3,righty:a4,lefttrigger:a2,righttrigger:a5,platform:{plat},"
-                                        sdl.SDL_GameControllerAddMapping(synth.encode("utf-8"))
-                                        if os.path.isfile(db):
-                                            try:
-                                                with open(db, "a", encoding="utf-8") as f:
-                                                    f.write("\n" + synth + "\n")
-                                            except Exception:
-                                                pass
-                            finally:
-                                sdl.SDL_JoystickClose(jh)
+                for i in range(sdl.SDL_NumJoysticks()):
+                    if sdl.SDL_IsGameController(i):
+                        continue
+                    jh = sdl.SDL_JoystickOpen(i)
+                    if not jh:
+                        continue
+                    try:
+                        if sdl.SDL_JoystickGetType(jh) == SDL_JOYSTICK_TYPE_WHEEL:
+                            continue
+                        raw_name = sdl.SDL_JoystickNameForIndex(i)
+                        j_name = raw_name.decode("utf-8", "replace") if raw_name else ""
+                        buf = ctypes.create_string_buffer(64)
+                        sdl.SDL_JoystickGetGUIDString(sdl.SDL_JoystickGetGUID(jh), buf, 64)
+                        synth = _synth_mapping(buf.value.decode("ascii", "replace"), j_name,
+                                               sdl.SDL_JoystickNumAxes(jh), sdl.SDL_JoystickNumHats(jh),
+                                               sdl.SDL_JoystickNumButtons(jh))
+                        if synth and sdl.SDL_GameControllerAddMapping(synth.encode("utf-8")) >= 0:
+                            _remember_synth(db, synth)
+                    finally:
+                        sdl.SDL_JoystickClose(jh)
             except Exception:
                 pass
 
@@ -403,7 +463,7 @@ def _sdl2_gamepads() -> Optional[list[str]]:
         return out
     finally:
         sdl.SDL_QuitSubSystem.argtypes = [ctypes.c_uint32]
-        sdl.SDL_QuitSubSystem(SDL_INIT_GAMEPAD)
+        sdl.SDL_QuitSubSystem(SDL_INIT_GAMEPAD | SDL_INIT_JOYSTICK)
 
 
 def input_config_path() -> str:
@@ -458,9 +518,6 @@ def configure(mode: str, device: str = "", log=print) -> str:
 # emulation (LogitechG27.cpp), 0x00 is Pressed and 0xFF is Released. Released pedal must
 # read as the axis maximum (+32767), and pressed pedal must read as the axis minimum (-32768).
 # Hence, pedals resting at +32767 (e.g. Thrustmaster T150/T300) need reverse: false.
-
-SDL_INIT_JOYSTICK = 0x00000200
-SDL_JOYSTICK_TYPE_WHEEL = 2
 
 G27_KEYS = ["steering", "throttle", "brake", "clutch", "shift_up", "shift_down", "up", "down", "left", "right",
             "triangle", "cross", "square", "circle", "l2", "l3", "r2", "r3", "plus", "minus", "dial_clockwise",

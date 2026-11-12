@@ -1231,7 +1231,7 @@ class MainWindow(QMainWindow):
         adapter = self.s.gpu_adapter
         if not adapter:
             adapters = self.core.gpu_adapters()
-            adapter = adapters[0] if adapters else ""
+            adapter = adapters[0] if adapters else profile.detect_gpu_name()
 
         recommended, summary = profile.recommend_settings_for_hardware(cpu_info, adapter, ram_gb)
         for k, v in recommended.items():
@@ -1811,7 +1811,7 @@ class MainWindow(QMainWindow):
         entry = self.current()
         if entry:
             names = self.core.prepare(entry)
-            QMessageBox.information(self, "Config", f"Written. Enabled patches:\n" + "\n".join(names))
+            QMessageBox.information(self, "Config", "Written. Enabled patches:\n" + "\n".join(names))
 
     def reset_game_data(self) -> None:
         entry = self.current()

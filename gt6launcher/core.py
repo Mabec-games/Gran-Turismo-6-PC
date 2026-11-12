@@ -417,8 +417,6 @@ class Core:
         except (AttributeError, OSError, ValueError):
             pass
 
-        weak_gpu_markers = ("gtx 1030", "gt 1030", "gtx 1050", "gtx 1630", "gtx 1650",
-                            "radeon rx 550", "radeon rx 560", "radeon vega 8")
         for adapter in self.gpu_adapters():
             is_low, msg = self.check_gpu_low_vram(adapter)
             if is_low and msg:

@@ -166,6 +166,70 @@ def detect_gpu_pcie_bottleneck() -> bool:
     return False
 
 
+def _is_handheld_platform(cpu_name: str, dmi_info: str = "") -> bool:
+    """Return True if the CPU or board/product DMI clearly identifies a handheld gaming PC."""
+    combined_l = f"{cpu_name} {dmi_info}".lower()
+    # Explicit substring matches (safe from chipset collisions like Z170/Z270)
+    handheld_phrases = (
+        "custom apu 0405", "aerith", "sephiroth", "steam deck", "steamdeck", "valve jupiter", "valve galileo",
+        "ryzen z1", "z1 extreme", "ryzen z2", "z2 extreme", "z2 go",
+        "rog ally", "ally x", "rc71l", "rc72l",
+        "legion go", "83e1", "83l3",
+        "msi claw", "claw a8", "claw 8", "claw 7", "claw a1m",
+        "strix halo", "ai max+ 395", "ai max 395", "ai max 388", "ai max 385", "ryzen ai max",
+        "gpd win", "ayaneo", "onexplayer", "aokzoe", "zotac zone",
+    )
+    return any(h in combined_l for h in handheld_phrases)
+
+
+def detect_gpu_name() -> str:
+    """Fallback GPU name detection when rpcs3.log does not exist yet (Windows registry / Linux lspci)."""
+    candidates: list[str] = []
+    if sys.platform == "win32":
+        try:
+            import winreg
+            base_key = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base_key) as cls_key:
+                for i in range(16):
+                    try:
+                        sub = winreg.EnumKey(cls_key, i)
+                        if not sub.isdigit():
+                            continue
+                        with winreg.OpenKey(cls_key, sub) as dev_key:
+                            desc, _ = winreg.QueryValueEx(dev_key, "DriverDesc")
+                            if desc:
+                                candidates.append(str(desc).strip())
+                    except OSError:
+                        break
+        except Exception:
+            pass
+    elif sys.platform == "linux":
+        try:
+            import shutil
+            import subprocess
+            if shutil.which("lspci"):
+                out = subprocess.check_output(["lspci"], text=True, errors="replace", timeout=2)
+                for line in out.splitlines():
+                    low = line.lower()
+                    if "vga compatible controller" in low or "3d controller" in low or "display controller" in low:
+                        parts = line.split(":", 2)
+                        if len(parts) == 3:
+                            candidates.append(parts[2].strip())
+        except Exception:
+            pass
+    if not candidates:
+        return ""
+    # Prefer discrete GPU over integrated graphics (matching Vulkan discrete-first ordering)
+    discrete_markers = ("rtx", "gtx", "rx ", "radeon pro", "arc a", "arc b", "arc(tm) a", "arc(tm) b")
+    for c in candidates:
+        if any(m in c.lower() for m in discrete_markers):
+            return c
+    for c in candidates:
+        if "microsoft basic" not in c.lower() and "llvmpipe" not in c.lower():
+            return c
+    return candidates[0]
+
+
 def detect_cpu_info() -> dict[str, Any]:
     """Detect CPU model name, thread count, and architecture characteristics."""
     threads = os.cpu_count() or 4
@@ -219,17 +283,7 @@ def detect_cpu_info() -> dict[str, Any]:
     is_intel_hybrid = "intel" in combined_l and any(
         g in combined_l for g in ("12th gen", "13th gen", "14th gen", "core ultra", "-12", "-13", "-14", "lunar lake", "arrow lake")
     )
-    handheld_keywords = (
-        "custom apu 0405", "aerith", "sephiroth", "steam deck", "steamdeck", "jupiter", "galileo",
-        "z1 extreme", "z1", "z2 extreme", "z2",
-        "rog ally", "ally x", "rc71l", "rc72l",
-        "legion go", "legion go s", "83e1",
-        "msi claw", "claw a8", "claw 8", "claw a1m", "claw",
-        "strix halo", "ai max+ 395", "ai max 395", "ai max 388", "ai max 385", "ryzen ai max",
-        "7840u", "8840u", "8945hs", "7940u",
-        "gpd win", "ayaneo", "onexplayer", "aokzoe",
-    )
-    is_handheld_cpu = any(h in combined_l for h in handheld_keywords)
+    is_handheld_cpu = _is_handheld_platform(name, dmi_info)
     return {
         "name": name,
         "threads": threads,
@@ -257,12 +311,16 @@ def recommend_settings_for_hardware(cpu_info: dict[str, Any], gpu_name: str, ram
     pcie_x8_gpus = ("5060", "4060", "3050", "7600", "6600", "6650", "6500", "6400", "5500", "a380", "a310")
     is_pcie_x8_gpu = any(g in gpu_l for g in pcie_x8_gpus)
 
-    # Detect PCIe 3.0 / legacy motherboards or chipsets (AM4 PCIe 3.0: B450, B350, A320, X370, X470, A520; Intel LGA1151/1200 PCIe 3.0)
+    # Detect PCIe 3.0 vs PCIe 4.0+ motherboards/chipsets
     pcie3_chipsets = ("b450", "b350", "a320", "x370", "x470", "a520", "h310", "b360", "b365", "h370", "z370", "z390", "h410", "b460", "h470", "z490", "h510")
+    pcie4_plus_chipsets = ("b550", "x570", "b650", "x670", "b850", "x870", "z590", "b560", "h570", "z690", "b660", "h670", "z790", "b760", "h770", "z890", "b860")
     is_pcie3_board = any(c in dmi_l for c in pcie3_chipsets)
+    is_pcie4_plus_board = any(c in dmi_l for c in pcie4_plus_chipsets)
 
-    # Detect hardware configuration from Issue #36: RTX 5060 on B450 / ASUS PRIME B450M-K with AMD Ryzen 5 5600
-    is_issue36_exact = "5060" in gpu_l and ("5600" in cpu_l or "b450" in dmi_l or "prime b450m-k" in dmi_l)
+    # Issue #36: RTX 5060 on B450 / ASUS PRIME B450M-K with Ryzen 5 5600 (or unknown board with 5600+5060, unless known PCIe 4.0+)
+    is_issue36_exact = "5060" in gpu_l and (
+        "b450" in dmi_l or "prime b450m-k" in dmi_l or ("5600" in cpu_l and not is_pcie4_plus_board)
+    )
 
     # Narrow PCIe bus bottleneck (Issue #36): RSX thread saturated by color buffer readback over PCIe 3.0 x8 (~8 GB/s)
     is_pcie_bandwidth_bottleneck = (
@@ -271,18 +329,24 @@ def recommend_settings_for_hardware(cpu_info: dict[str, Any], gpu_name: str, ram
     )
 
     is_amd = any(x in gpu_l for x in ("amd", "radeon"))
-    is_igpu = is_handheld_cpu or any(
-        x in gpu_l for x in ("steam deck", "steamdeck", "vega", "660m", "680m", "740m", "760m", "780m", "uhd", "hd graphics", "iris")
-    ) or ("graphics" in gpu_l and not any(x in gpu_l for x in ("rx ", "rtx", "gtx", "pro ", "xt")))
+    is_discrete_gpu = any(x in gpu_l for x in ("rtx", "gtx", "rx ", "radeon pro", "arc a", "arc b", "arc(tm) a", "arc(tm) b", "quadro"))
+    is_igpu = (not is_discrete_gpu) and (
+        is_handheld_cpu
+        or any(x in gpu_l for x in ("steam deck", "steamdeck", "vega", "660m", "680m", "740m", "760m", "780m", "uhd", "hd graphics", "iris", "130v", "140v"))
+        or ("graphics" in gpu_l)
+    )
 
     is_high_end = not is_igpu and not is_pcie_bandwidth_bottleneck and any(
         x in gpu_l for x in (
-            "4090", "4080", "4070", "3090", "3080", "3070",
+            "5090", "5080", "5070", "4090", "4080", "4070", "3090", "3080", "3070",
             "7900", "7800", "6950", "6900", "6800", "9060", "9070", "9080", "xtx"
         )
     )
 
-    settings: dict[str, Any] = {}
+    settings: dict[str, Any] = {
+        "render_path": "auto",
+        "lamp_glare": 1.0,
+    }
     summary: list[str] = []
 
     # SPU Block Size
@@ -313,7 +377,6 @@ def recommend_settings_for_hardware(cpu_info: dict[str, Any], gpu_name: str, ram
         settings["aa"] = "off"
         settings["lamp_glare"] = 0.0
         settings["strict_rendering"] = False
-        settings["extra_patches"] = {"Speedboost (disable Write Color Buffers)": {"enabled": True, "values": {}}}
         board_desc = "B450 / PCIe 3.0" if (is_pcie3_board or "b450" in dmi_l) else "PCIe 3.0 x8 bus"
         summary.append(
             f"GPU ({display_gpu}) on {board_desc} -> PCIe Bottleneck Fix (Issue #36): "
