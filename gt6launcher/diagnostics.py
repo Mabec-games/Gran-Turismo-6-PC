@@ -171,8 +171,9 @@ def _rpcs3_hardware() -> dict[str, str]:
 
 
 def save_logs(launcher_text: str, active_session: bool = False) -> tuple[str, Optional[str]]:
-    """Save a unique copy of the last completed session (or the live one if requested)."""
+    """Save a copy of the current session's launcher log and RPCS3 log for bug reports."""
     root = paths.logs_dir()
+    os.makedirs(root, exist_ok=True)
     stamp = _timestamp()
     folder = os.path.join(root, f"session-{stamp}")
     suffix = 1
@@ -185,21 +186,18 @@ def save_logs(launcher_text: str, active_session: bool = False) -> tuple[str, Op
             suffix += 1
 
     last_dir = _last_session_dir()
-    saved_launcher = os.path.join(last_dir, "launcher.log")
-    if not active_session and os.path.isfile(saved_launcher):
-        launcher_source = saved_launcher
-        launcher_path = os.path.join(folder, "launcher.log")
-        try:
-            with open(launcher_source, "rb") as src, open(launcher_path, "wb") as dst:
-                dst.write(src.read())
-        except OSError:
-            launcher_source = ""
-    else:
-        launcher_source = ""
     launcher_path = os.path.join(folder, "launcher.log")
-    if not launcher_source:
+    if launcher_text.strip():
         with open(launcher_path, "w", encoding="utf-8", newline="\n") as f:
             f.write(launcher_text.rstrip() + "\n")
+    else:
+        saved_launcher = os.path.join(last_dir, "launcher.log")
+        if os.path.isfile(saved_launcher):
+            with open(saved_launcher, "rb") as src, open(launcher_path, "wb") as dst:
+                dst.write(src.read())
+        else:
+            with open(launcher_path, "w", encoding="utf-8", newline="\n") as f:
+                f.write("")
 
     origin_log = os.path.join(root, "rpcs3-launch-origin.log")
     if os.path.isfile(origin_log):
@@ -209,11 +207,15 @@ def save_logs(launcher_text: str, active_session: bool = False) -> tuple[str, Op
         except OSError:
             pass
 
+    live_rpcs3 = paths.rpcs3_log_file()
     saved_rpcs3 = os.path.join(last_dir, "RPCS3.log")
     rpcs3_path = os.path.join(folder, "RPCS3.log")
-    copied = (_copy_rpcs3_log(rpcs3_path) if active_session else
-              _copy_rpcs3_log(rpcs3_path, saved_rpcs3) if os.path.isfile(saved_rpcs3) else
-              _copy_rpcs3_log(rpcs3_path))
+    if os.path.isfile(live_rpcs3) and os.path.getsize(live_rpcs3) > 0:
+        copied = _copy_rpcs3_log(rpcs3_path, live_rpcs3)
+    elif os.path.isfile(saved_rpcs3):
+        copied = _copy_rpcs3_log(rpcs3_path, saved_rpcs3)
+    else:
+        copied = False
     return launcher_path, rpcs3_path if copied else None
 
 

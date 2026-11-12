@@ -1010,8 +1010,7 @@ class MainWindow(QMainWindow):
         v = QVBoxLayout(w)
         actions = QHBoxLayout()
         save = QPushButton("Save current logs")
-        save.setToolTip("Save the last completed game session's launcher and RPCS3 logs in a new folder."
-                        " Each save is kept separately.")
+        save.setToolTip("Save the current session's launcher and RPCS3 logs to a folder for bug reports.")
         save.clicked.connect(self._save_logs)
         actions.addWidget(save)
         actions.addStretch(1)
