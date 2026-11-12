@@ -307,5 +307,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Invert": "反转",
         "Buttons: press any mapped button to test": "按键测试：按下任意已映射按键进行测试",
         "Pressed": "已按下",
+        "Handheld": "掌机",
+        "Handheld Controller": "掌机手柄",
     }
 }

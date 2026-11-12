@@ -129,6 +129,7 @@ def detect_cpu_info() -> dict[str, Any]:
     """Detect CPU model name, thread count, and architecture characteristics."""
     threads = os.cpu_count() or 4
     name = ""
+    dmi_info = ""
     if sys.platform == "linux":
         try:
             with open("/proc/cpuinfo", "r", errors="replace") as f:
@@ -136,6 +137,13 @@ def detect_cpu_info() -> dict[str, Any]:
                     if "model name" in line:
                         name = line.split(":", 1)[1].strip()
                         break
+        except Exception:
+            pass
+        try:
+            for dmi_file in ("/sys/devices/virtual/dmi/id/product_name", "/sys/devices/virtual/dmi/id/sys_vendor", "/sys/devices/virtual/dmi/id/board_name"):
+                if os.path.isfile(dmi_file):
+                    with open(dmi_file, "r", errors="replace") as f:
+                        dmi_info += " " + f.read().strip()
         except Exception:
             pass
     elif sys.platform == "win32":
@@ -146,14 +154,31 @@ def detect_cpu_info() -> dict[str, Any]:
             name = name.strip()
         except Exception:
             pass
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\BIOS")
+            dmi_val, _ = winreg.QueryValueEx(key, "SystemProductName")
+            dmi_info += " " + str(dmi_val).strip()
+        except Exception:
+            pass
     if not name:
         import platform
         name = platform.processor() or "Generic Processor"
-    name_l = name.lower()
-    is_intel_hybrid = "intel" in name_l and any(
-        g in name_l for g in ("12th gen", "13th gen", "14th gen", "core ultra", "-12", "-13", "-14")
+    combined_l = (name + " " + dmi_info).lower()
+    is_intel_hybrid = "intel" in combined_l and any(
+        g in combined_l for g in ("12th gen", "13th gen", "14th gen", "core ultra", "-12", "-13", "-14", "lunar lake", "arrow lake")
     )
-    is_handheld_cpu = any(h in name_l for h in ("custom apu 0405", "aerith", "sephiroth", "z1 extreme", "z1"))
+    handheld_keywords = (
+        "custom apu 0405", "aerith", "sephiroth", "steam deck", "steamdeck", "jupiter", "galileo",
+        "z1 extreme", "z1", "z2 extreme", "z2",
+        "rog ally", "ally x", "rc71l", "rc72l",
+        "legion go", "legion go s", "83e1",
+        "msi claw", "claw a8", "claw 8", "claw a1m", "claw",
+        "strix halo", "ai max+ 395", "ai max 395", "ai max 388", "ai max 385", "ryzen ai max",
+        "7840u", "8840u", "8945hs", "7940u",
+        "gpd win", "ayaneo", "onexplayer", "aokzoe",
+    )
+    is_handheld_cpu = any(h in combined_l for h in handheld_keywords)
     return {
         "name": name,
         "threads": threads,

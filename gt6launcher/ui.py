@@ -502,7 +502,7 @@ class MainWindow(QMainWindow):
         f.addLayout(h)
         self.pad_lbl = label("", 9, name="muted")
         f.addWidget(self.pad_lbl)
-        f.addWidget(label("Automatic uses the first detected gamepad (Xbox, PlayStation, 8BitDo, Switch Pro ...) "
+        f.addWidget(label("Automatic uses the first detected gamepad (Steam Deck, ROG Ally, Legion Go, MSI Claw, Xbox, PlayStation, 8BitDo...) "
                           "with standard button mapping; if none is detected, the current RPCS3 input setting is kept. "
                           "Choose Keyboard explicitly to switch to keyboard input. Racing-game style "
                           "triggers (RT accelerate, LT brake): in the game, Options -> Wireless Controller.", 9, name="muted"))
@@ -564,7 +564,8 @@ class MainWindow(QMainWindow):
         self.pad_box.clear()
         self.pad_box.addItem(tr("Automatic (first gamepad, else keyboard)"), ("auto", ""))
         for p in pads or []:
-            self.pad_box.addItem(p, ("pad", p))
+            tag = f" 🎮 [{tr('Handheld')}]" if gamepad.is_handheld_controller(p) else ""
+            self.pad_box.addItem(f"{p}{tag}", ("pad", p))
         if self.s.controller_mode == "pad" and self.s.controller_device not in (pads or []):
             self.pad_box.addItem(f"{self.s.controller_device} {tr('(not connected)')}", ("pad", self.s.controller_device))
         self.pad_box.addItem(tr("Keyboard"), ("keyboard", ""))
