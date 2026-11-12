@@ -665,11 +665,26 @@ class MainWindow(QMainWindow):
         f.addRow("Aspect ratio", self.ctl["aspect"])
         self.ctl["output_resolution"] = self._combo(profile.OUTPUT_RESOLUTIONS, "output_resolution")
         f.addRow("PS3 output", self.ctl["output_resolution"])
+        opt_row = QHBoxLayout()
+        self.auto_opt_btn = QPushButton("⚡ Auto-configure for my PC")
+        self.auto_opt_btn.setToolTip(
+            "Automatically detects your CPU, GPU, and RAM to set optimal graphics and emulation settings.")
+        self.auto_opt_btn.clicked.connect(self.auto_configure_hardware)
+        opt_row.addWidget(self.auto_opt_btn, 1)
+
+        self.restore_opt_btn = QPushButton("Restore previous settings")
+        self.restore_opt_btn.setToolTip(
+            "Restore the settings you had before running auto-configuration.")
+        self.restore_opt_btn.clicked.connect(self.restore_previous_settings)
+        opt_row.addWidget(self.restore_opt_btn, 1)
+        f.addRow("Presets", opt_row)
+
         self.handheld_preset_btn = QPushButton()
         self.handheld_preset_btn.setToolTip(
             "Apply the 800p handheld graphics preset. Press again to restore the graphics settings you had before.")
         self.handheld_preset_btn.clicked.connect(self.apply_handheld_preset)
         self._update_handheld_preset_button()
+        self._update_auto_opt_buttons()
         f.addRow("", self.handheld_preset_btn)
         self.ctl["shadows"] = self._combo(profile.SHADOWS, "shadows")
         f.addRow("Shadows", self.ctl["shadows"])
@@ -1143,6 +1158,7 @@ class MainWindow(QMainWindow):
         finally:
             self._loading = False
         self._update_hints()
+        self._update_auto_opt_buttons()
 
     def _update_hints(self) -> None:
         hints = []
@@ -1162,6 +1178,56 @@ class MainWindow(QMainWindow):
             hints.append(tr("Ultrawide: 3D view is widened, HUD and menus stay 16:9."))
         self.gfx_hint.setText("\n".join(hints))
         self.ctl["cas_sharpening"].setEnabled(self.s.upscaler == "fsr")
+
+    AUTO_OPT_BACKUP_KEY = "auto_opt_backup"
+
+    def auto_configure_hardware(self) -> None:
+        """Detect CPU, GPU, and RAM, optimize settings for GT6, and provide revert option."""
+        # Save snapshot of current settings before optimizing
+        self.core.data[self.AUTO_OPT_BACKUP_KEY] = self.s.to_dict()
+
+        cpu_info = profile.detect_cpu_info()
+        ram_gb = profile.detect_system_ram_gb()
+        adapter = self.s.gpu_adapter
+        if not adapter:
+            adapters = self.core.gpu_adapters()
+            adapter = adapters[0] if adapters else ""
+
+        recommended, summary = profile.recommend_settings_for_hardware(cpu_info, adapter, ram_gb)
+        for k, v in recommended.items():
+            setattr(self.s, k, v)
+
+        self.core.save()
+        self._load_settings_into_ui()
+        self._update_auto_opt_buttons()
+        self._fill_patch_list()
+
+        summary_txt = "\n".join(f"• {item}" for item in summary)
+        QMessageBox.information(
+            self,
+            tr("Hardware Auto-Configuration"),
+            tr("Optimal settings have been applied based on your detected hardware:\n\n")
+            + summary_txt
+            + tr("\n\n(You can click 'Restore previous settings' anytime to revert.)")
+        )
+
+    def restore_previous_settings(self) -> None:
+        """Restore settings backed up before the last auto-configuration."""
+        backup = self.core.data.pop(self.AUTO_OPT_BACKUP_KEY, None)
+        if not backup or not isinstance(backup, dict):
+            QMessageBox.information(self, tr("Restore Settings"), tr("No previous settings backup was found."))
+            return
+        self.core.settings = self.s = profile.Settings.from_dict(backup)
+        self.core.save()
+        self._load_settings_into_ui()
+        self._update_auto_opt_buttons()
+        self._fill_patch_list()
+        QMessageBox.information(self, tr("Restore Settings"), tr("Your previous settings have been restored."))
+
+    def _update_auto_opt_buttons(self) -> None:
+        if hasattr(self, "restore_opt_btn"):
+            has_backup = bool(self.core.data.get(self.AUTO_OPT_BACKUP_KEY))
+            self.restore_opt_btn.setEnabled(has_backup)
 
     def apply_handheld_preset(self) -> None:
         previous = self.core.data.get(self.HANDHELD_RESTORE_KEY)
@@ -1196,11 +1262,13 @@ class MainWindow(QMainWindow):
 
     def reset_profile(self) -> None:
         self.core.data.pop(self.HANDHELD_RESTORE_KEY, None)
+        self.core.data.pop(self.AUTO_OPT_BACKUP_KEY, None)
         keep = {k: getattr(self.s, k) for k in self.RESET_KEEP}
         self.core.settings = self.s = profile.Settings.from_dict(keep)
         self.core.save()
         self._load_settings_into_ui()
         self._update_handheld_preset_button()
+        self._update_auto_opt_buttons()
         self._fill_pads()
         self._update_wheel_label()
         self._fill_patch_list()

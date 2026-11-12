@@ -277,5 +277,16 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Hardware may struggle with GT6": "硬件配置提示",
         "This PC may struggle to run Gran Turismo 6 smoothly.": "当前电脑配置在运行《GT赛车6》时可能会遇到性能瓶颈。",
         "Switch language": "切换界面语言",
+
+        # Auto-configuration
+        "⚡ Auto-configure for my PC": "⚡ 根据本机配置自动优化",
+        "Restore previous settings": "恢复之前的设置",
+        "Presets": "预设方案",
+        "Hardware Auto-Configuration": "硬件配置自动优化",
+        "Optimal settings have been applied based on your detected hardware:\n\n": "已根据检测到的电脑硬件应用最佳性能设置：\n\n",
+        "\n\n(You can click 'Restore previous settings' anytime to revert.)": "\n\n(您可以随时点击“恢复之前的设置”以还原。)",
+        "Your previous settings have been restored.": "之前的设置已成功恢复。",
+        "No previous settings backup was found.": "未找到之前的设置备份。",
+        "Restore Settings": "恢复设置",
     }
 }

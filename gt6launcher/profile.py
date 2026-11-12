@@ -125,6 +125,123 @@ def default_spu_block_size() -> str:
     return "Safe" if ram < 7.0 else "Mega"
 
 
+def detect_cpu_info() -> dict[str, Any]:
+    """Detect CPU model name, thread count, and architecture characteristics."""
+    threads = os.cpu_count() or 4
+    name = ""
+    if sys.platform == "linux":
+        try:
+            with open("/proc/cpuinfo", "r", errors="replace") as f:
+                for line in f:
+                    if "model name" in line:
+                        name = line.split(":", 1)[1].strip()
+                        break
+        except Exception:
+            pass
+    elif sys.platform == "win32":
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0")
+            name, _ = winreg.QueryValueEx(key, "ProcessorNameString")
+            name = name.strip()
+        except Exception:
+            pass
+    if not name:
+        import platform
+        name = platform.processor() or "Generic Processor"
+    name_l = name.lower()
+    is_intel_hybrid = "intel" in name_l and any(
+        g in name_l for g in ("12th gen", "13th gen", "14th gen", "core ultra", "-12", "-13", "-14")
+    )
+    is_handheld_cpu = any(h in name_l for h in ("custom apu 0405", "aerith", "sephiroth", "z1 extreme", "z1"))
+    return {
+        "name": name,
+        "threads": threads,
+        "is_intel_hybrid": is_intel_hybrid,
+        "is_handheld": is_handheld_cpu,
+    }
+
+
+def recommend_settings_for_hardware(cpu_info: dict[str, Any], gpu_name: str, ram_gb: float) -> tuple[dict[str, Any], list[str]]:
+    """Determine the optimal GT6 settings based on detected CPU, GPU, and RAM."""
+    cpu_name = cpu_info.get("name", "Generic CPU")
+    threads = cpu_info.get("threads", 4)
+    is_intel_hybrid = cpu_info.get("is_intel_hybrid", False)
+    is_handheld_cpu = cpu_info.get("is_handheld", False)
+
+    gpu_l = (gpu_name or "").lower()
+    is_amd = any(x in gpu_l for x in ("amd", "radeon"))
+    is_igpu = is_handheld_cpu or any(
+        x in gpu_l for x in ("steam deck", "steamdeck", "vega", "660m", "680m", "740m", "760m", "780m", "uhd", "hd graphics", "iris")
+    ) or ("graphics" in gpu_l and not any(x in gpu_l for x in ("rx ", "rtx", "gtx", "pro ", "xt")))
+
+    is_high_end = not is_igpu and any(
+        x in gpu_l for x in (
+            "4090", "4080", "4070", "3090", "3080", "3070",
+            "7900", "7800", "6950", "6900", "6800", "9060", "9070", "9080", "xtx"
+        )
+    )
+
+    settings: dict[str, Any] = {}
+    summary: list[str] = []
+
+    # SPU Block Size
+    if ram_gb < 7.0:
+        settings["spu_block_size"] = "Safe"
+        summary.append(f"RAM ({ram_gb:.0f} GB) -> SPU Block Size: Safe (low compiler memory)")
+    else:
+        settings["spu_block_size"] = "Mega"
+        summary.append(f"RAM ({ram_gb:.0f} GB) -> SPU Block Size: Mega (optimal GT6 thread pacing)")
+
+    # Thread Scheduler
+    if is_intel_hybrid:
+        settings["thread_scheduler"] = "RPCS3 Alternative Scheduler"
+        summary.append(f"CPU ({cpu_name}) -> RPCS3 Alternative Scheduler (avoids E-core thread stalls)")
+    else:
+        settings["thread_scheduler"] = "Operating System"
+        summary.append(f"CPU ({cpu_name}, {threads} threads) -> OS Thread Scheduler")
+
+    # GPU & Visuals
+    display_gpu = gpu_name or "Integrated Graphics"
+    if is_igpu:
+        settings["output_resolution"] = "1280x720"
+        settings["resolution_scale"] = 100
+        settings["upscaler"] = "fsr"
+        settings["cas_sharpening"] = 60
+        settings["shadows"] = "stock"
+        settings["aa"] = "mlaa_sharp"
+        settings["strict_rendering"] = False
+        summary.append(f"GPU ({display_gpu}) -> Handheld/iGPU: 720p, 100% Scale + FSR 1, Stock Shadows")
+    elif is_high_end:
+        settings["output_resolution"] = "1920x1080"
+        settings["resolution_scale"] = 200
+        settings["upscaler"] = "bilinear"
+        settings["shadows"] = "sharp"
+        settings["aa"] = "off"
+        settings["strict_rendering"] = is_amd
+        amd_fix = ", Strict Rendering: ON (fixes AMD hood reflection/strobe)" if is_amd else ""
+        summary.append(f"GPU ({display_gpu}) -> High-End: 1080p output, 200% Scale (SSAA), Sharp Shadows{amd_fix}")
+    else:
+        settings["output_resolution"] = "1920x1080"
+        settings["resolution_scale"] = 150
+        settings["upscaler"] = "bilinear"
+        settings["shadows"] = "sharp"
+        settings["aa"] = "mlaa_sharp"
+        settings["strict_rendering"] = is_amd
+        amd_fix = ", Strict Rendering: ON (fixes AMD hood reflection/strobe)" if is_amd else ""
+        summary.append(f"GPU ({display_gpu}) -> Mid-Range: 1080p output, 150% Scale, Sharp Shadows{amd_fix}")
+
+    # Core stability settings
+    settings["zcull_queries_disabled"] = False
+    settings["zcull_accuracy"] = "Approximate"
+    settings["accurate_rsx_reservation"] = True
+    settings["handle_tiled_memory"] = True
+    settings["multithreaded_rsx"] = False
+    settings["unlock_menu_fps"] = True
+
+    return settings, summary
+
+
 @dataclass
 class Settings:
     # display
