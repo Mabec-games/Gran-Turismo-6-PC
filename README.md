@@ -5,7 +5,7 @@
 <h1 align="center">Gran Turismo 6 PC</h1>
 
 <p align="center">
-  <b>Version 1.1.3</b> · Linux &amp; Windows<br>
+  <b>Version 1.2</b> · Linux &amp; Windows<br>
   Gran Turismo 6, one of the hardest PlayStation 3 games to emulate, set up for PC in one download:
   a GT6-tuned emulator, the official updates, modern graphics options, gamepads and racing wheels,
   mods, LAN racing and more, behind a single <b>PLAY</b> button.
@@ -84,7 +84,7 @@ On top of that comes a **patched emulator build** (below) that changes RPCS3 its
 
 ## Download
 
-Get **v1.1.3** from [Releases](../../releases):
+Get **v1.2** from [Releases](../../releases):
 
 * **Linux (Ubuntu, Debian, Linux Mint, Pop!_OS, SteamOS & SDL2 distros):** `GT6-Launcher-Ubuntu-SDL2-x86_64.AppImage`. Built on Ubuntu 22.04 LTS (`GLIBC 2.35+`) with both SDL3 and SDL2 (`libSDL2-2.0.so.0`) gamepad/wheel support.
 * **Linux (Arch, CachyOS & rolling-release distros):** `GT6-Launcher-x86_64.AppImage`. Make it executable and start it.
@@ -123,7 +123,7 @@ Get **v1.1.3** from [Releases](../../releases):
 | UK | BCES01977 | ✔ | 1.22, 1.05 | – | – |
 | Japan / Asia / Latin America / PSN | | ✔ | partly | – | – |
 
-## Status of v1.1.3
+## Status of v1.2
 
 Tested: EU 1.22 on Linux (Ryzen 9 6900HS, RTX 3080 Laptop) and Windows 10/11: full update install,
 first boot, races with 6 cars at 60 FPS, mod install/uninstall, gamepad, LAN code verification.
