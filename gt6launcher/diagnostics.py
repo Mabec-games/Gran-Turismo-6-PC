@@ -7,6 +7,7 @@ import re
 import shlex
 import subprocess
 import time
+import zipfile
 from datetime import datetime
 from typing import Optional
 
@@ -168,6 +169,65 @@ def _rpcs3_hardware() -> dict[str, str]:
     found["RAM"] = found["RAM"] or _ram_total()
     found["GPU"] = found["GPU"] or "not reported by RPCS3"
     return found
+
+
+def _read_rpcs3_log_bytes(source: str) -> Optional[bytes]:
+    try:
+        with open(source, "rb") as src:
+            src.seek(0, os.SEEK_END)
+            size = src.tell()
+            start = max(0, size - _MAX_RPCS3_LOG_BYTES)
+            src.seek(start)
+            data = src.read()
+        if start:
+            header = (f"[Launcher included the last {_MAX_RPCS3_LOG_BYTES} bytes of the RPCS3 log; "
+                      f"{size - _MAX_RPCS3_LOG_BYTES} earlier bytes omitted.]\n\n").encode("utf-8")
+            return header + data
+        return data
+    except OSError:
+        return None
+
+
+def save_logs_archive(dest_zip: str, launcher_text: str) -> tuple[str, bool]:
+    """Bundle the current session's launcher log and RPCS3 log into a user-chosen .zip file."""
+    if not dest_zip.lower().endswith(".zip"):
+        dest_zip += ".zip"
+    parent = os.path.dirname(os.path.abspath(dest_zip))
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+
+    last_dir = _last_session_dir()
+    if launcher_text.strip():
+        launcher_bytes = (launcher_text.rstrip() + "\n").encode("utf-8")
+    else:
+        saved_launcher = os.path.join(last_dir, "launcher.log")
+        try:
+            with open(saved_launcher, "rb") as f:
+                launcher_bytes = f.read()
+        except OSError:
+            launcher_bytes = b""
+
+    live_rpcs3 = paths.rpcs3_log_file()
+    saved_rpcs3 = os.path.join(last_dir, "RPCS3.log")
+    rpcs3_bytes = None
+    if os.path.isfile(live_rpcs3) and os.path.getsize(live_rpcs3) > 0:
+        rpcs3_bytes = _read_rpcs3_log_bytes(live_rpcs3)
+    elif os.path.isfile(saved_rpcs3):
+        rpcs3_bytes = _read_rpcs3_log_bytes(saved_rpcs3)
+
+    tmp = dest_zip + ".tmp"
+    with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("launcher.log", launcher_bytes)
+        if rpcs3_bytes is not None:
+            zf.writestr("RPCS3.log", rpcs3_bytes)
+        origin_log = os.path.join(paths.logs_dir(), "rpcs3-launch-origin.log")
+        if os.path.isfile(origin_log):
+            try:
+                zf.write(origin_log, "rpcs3-launch-origin.log")
+            except OSError:
+                pass
+    os.replace(tmp, dest_zip)
+    return dest_zip, rpcs3_bytes is not None
 
 
 def save_logs(launcher_text: str, active_session: bool = False) -> tuple[str, Optional[str]]:

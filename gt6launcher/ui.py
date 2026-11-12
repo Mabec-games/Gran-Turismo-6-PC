@@ -1030,15 +1030,28 @@ class MainWindow(QMainWindow):
         self.log_view.appendPlainText(s.rstrip())
 
     def _save_logs(self) -> None:
-        try:
-            active = bool(self.proc and self.proc.poll() is None)
-            launcher_path, rpcs3_path = diagnostics.save_logs(self.log_view.toPlainText(), active_session=active)
-        except OSError as e:
-            self._append_log(f"[log save failed] {e}")
+        from datetime import datetime
+        base_dir = next((d for d in (os.path.expanduser("~/Desktop"), os.path.expanduser("~/Downloads"),
+                                     os.path.expanduser("~")) if os.path.isdir(d)), os.path.expanduser("~"))
+        default_name = f"gt6-logs-{datetime.now().strftime('%Y%m%d-%H%M%S')}.zip"
+        dest, _ = QFileDialog.getSaveFileName(
+            self, tr("Save current logs"), os.path.join(base_dir, default_name), "Zip archive (*.zip)"
+        )
+        if not dest:
             return
-        self._append_log(f"[logs saved] launcher: {launcher_path}")
-        if rpcs3_path:
-            self._append_log(f"[logs saved] RPCS3: {rpcs3_path}")
+        try:
+            zip_path, has_rpcs3 = diagnostics.save_logs_archive(dest, self.log_view.toPlainText())
+        except OSError as e:
+            QMessageBox.warning(self, tr("Save current logs"), f"{tr('Could not save logs:')} {e}")
+            return
+        included = "launcher.log + RPCS3.log" if has_rpcs3 else "launcher.log"
+        box = QMessageBox(QMessageBox.Icon.Information, tr("Save current logs"),
+                          f"{tr('Logs saved to:')}\n{zip_path}\n\n({included})",
+                          QMessageBox.StandardButton.Ok, self)
+        open_btn = box.addButton(tr("Open folder"), QMessageBox.ButtonRole.ActionRole)
+        box.exec()
+        if box.clickedButton() == open_btn:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.dirname(os.path.abspath(zip_path))))
         else:
             self._append_log("[logs saved] RPCS3 log was not available")
 
