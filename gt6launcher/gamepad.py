@@ -402,7 +402,9 @@ class Joysticks:
                      "vendor": s.SDL_GetJoystickVendor(h), "product": s.SDL_GetJoystickProduct(h),
                      "axes": s.SDL_GetNumJoystickAxes(h), "hats": s.SDL_GetNumJoystickHats(h),
                      "buttons": s.SDL_GetNumJoystickButtons(h)}
-                d["is_wheel"] = s.SDL_GetJoystickType(h) == SDL_JOYSTICK_TYPE_WHEEL or "wheel" in d["name"].lower()
+                name_l = d["name"].lower()
+                d["is_wheel"] = (s.SDL_GetJoystickType(h) == SDL_JOYSTICK_TYPE_WHEEL or "wheel" in name_l
+                                 or any(w in name_l for w in ("g923", "g29", "g920", "g27", "g25", "thrustmaster", "fanatec", "moza", "simucube", "cammus")))
                 d["type_id"] = type_id(d["vendor"], d["product"], d["axes"], d["hats"], d["buttons"])
                 self.devices.append(d)
             if ids:
@@ -419,7 +421,9 @@ class Joysticks:
                      "vendor": s.SDL_JoystickGetVendor(h), "product": s.SDL_JoystickGetProduct(h),
                      "axes": s.SDL_JoystickNumAxes(h), "hats": s.SDL_JoystickNumHats(h),
                      "buttons": s.SDL_JoystickNumButtons(h)}
-                d["is_wheel"] = s.SDL_JoystickGetType(h) == SDL_JOYSTICK_TYPE_WHEEL or "wheel" in d["name"].lower()
+                name_l = d["name"].lower()
+                d["is_wheel"] = (s.SDL_JoystickGetType(h) == SDL_JOYSTICK_TYPE_WHEEL or "wheel" in name_l
+                                 or any(w in name_l for w in ("g923", "g29", "g920", "g27", "g25", "thrustmaster", "fanatec", "moza", "simucube", "cammus")))
                 d["type_id"] = type_id(d["vendor"], d["product"], d["axes"], d["hats"], d["buttons"])
                 self.devices.append(d)
         return self.devices
@@ -470,7 +474,7 @@ def detect_change(base: list[dict], now: list[dict], devices: list[dict], want: 
                 if (tid, "axis", i) in exclude:
                     continue
                 delta = nv - bv
-                if abs(delta) > 0x7FFF * 0.5 and (best is None or abs(delta) > best["delta"]):
+                if abs(delta) > 0x7FFF * 0.35 and (best is None or abs(delta) > best["delta"]):
                     best = {"device_type_id": tid, "type": "axis", "id": i, "hat": "", "delta": abs(delta),
                             "rest": bv, "moved": nv}
         if want in ("button", "any") and best is None:

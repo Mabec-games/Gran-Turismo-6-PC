@@ -1937,12 +1937,14 @@ class WheelWizard(QDialog):
         v.addLayout(h)
         self.i = 0
         self.phase = "arm"
+        self.hit_control = None
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._poll)
         self._start_step()
         self.timer.start(25)
 
     def _start_step(self) -> None:
+        self.hit_control = None
         names = [f"{d['name']} ({d['vendor']:04X}:{d['product']:04X}, {d['axes']} axes)"
                  + ("  (wheel)" if d["is_wheel"] else "") for d in self.js.devices]
         self.devices_lbl.setText("Detected: " + (", ".join(names) or "no controllers - connect your wheel"))
@@ -1956,7 +1958,7 @@ class WheelWizard(QDialog):
         self.skip_btn.setEnabled(optional)
         self.back_btn.setEnabled(self.i > 0)
         self.phase = "settle"
-        self.settle_until = __import__("time").time() + 0.4
+        self.settle_until = __import__("time").time() + 0.3
         self.base = None
 
     def _refresh_capture_devices(self) -> None:
@@ -2009,16 +2011,10 @@ class WheelWizard(QDialog):
         now = self.js.state()
         if self.phase == "settle":  # wait until the previous control is released, then take a baseline
             if time.time() >= self.settle_until:
-                has_active_btn = any(b for dev in now.values() for b in dev.get("buttons", []))
-                has_active_hat = any(h != 0 for dev in now.values() for h in dev.get("hats", []))
-                if has_active_btn or has_active_hat:
-                    self.settle_until = time.time() + 0.15
-                    return
                 self.base, self.phase = now, "wait"
             return
         if self.phase == "release":
-            if self.gp.detect_change(self.base, now, self.js.devices, "any",
-                                     allowed_device_type_ids={self.hit_device_type_id}) is None:
+            if self.hit_control is not None and self._is_released(self.hit_control, now):
                 self.i += 1
                 self._start_step()
             return
@@ -2057,6 +2053,7 @@ class WheelWizard(QDialog):
         if not hit:
             return
         self.hit_device_type_id = hit["device_type_id"]
+        self.hit_control = hit
         m = {"device_type_id": hit["device_type_id"], "type": hit["type"], "id": hit["id"], "hat": hit["hat"],
              "reverse": False}
         if hit["type"] == "axis":
@@ -2080,6 +2077,42 @@ class WheelWizard(QDialog):
         what = f"{hit['type']} {hit['id']}" + (f" {hit['hat']}" if hit["hat"] else "")
         self.status.setText(f"OK - {what}. Release it...")
         self.phase = "release"
+
+    def _is_released(self, hit: dict, now: list[dict]) -> bool:
+        """Check if the specific control that was just calibrated has been released/centered."""
+        target_di = None
+        for di, d in enumerate(self.js.devices):
+            if d["type_id"] == hit["device_type_id"]:
+                target_di = di
+                break
+        if target_di is None or target_di >= len(now):
+            return True
+        dev_now = now[target_di]
+        kind = hit["type"]
+        idx = hit["id"]
+        if kind == "button":
+            buttons = dev_now.get("buttons", [])
+            return idx >= len(buttons) or not buttons[idx]
+        elif kind == "hat":
+            hats = dev_now.get("hats", [])
+            if idx < len(hats):
+                hat_val = hats[idx]
+                bit = next((b for b, name in self.gp.HAT_BITS.items() if name == hit.get("hat")), 0)
+                return (hat_val & bit) == 0 if bit else hat_val == 0
+            return True
+        elif kind == "axis":
+            axes = dev_now.get("axes", [])
+            if idx < len(axes):
+                current_val = axes[idx]
+                rest_val = hit.get("rest", 0)
+                moved_val = hit.get("moved", 0)
+                travel = abs(moved_val - rest_val)
+                dist = abs(current_val - rest_val)
+                if travel > 0:
+                    return dist <= travel * 0.35 or dist <= 0x7FFF * 0.2
+                return dist <= 0x7FFF * 0.2
+            return True
+        return True
 
     def _skip(self) -> None:
         key = self.STEPS[self.i][0]
