@@ -5,7 +5,7 @@
 <h1 align="center">Gran Turismo 6 PC</h1>
 
 <p align="center">
-  <b>Version 1.1.3</b> · Linux &amp; Windows<br>
+  <b>Version 1.1.3</b> (Stable) · <b><a href="../../releases/tag/v1.2-beta">v1.2 (Beta Pre-release)</a></b> · Linux &amp; Windows<br>
   Gran Turismo 6, one of the hardest PlayStation 3 games to emulate, set up for PC in one download:
   a GT6-tuned emulator, the official updates, modern graphics options, gamepads and racing wheels,
   mods, LAN racing and more, behind a single <b>PLAY</b> button.
@@ -17,6 +17,8 @@
 
 > **You need your own copy of Gran Turismo 6.** No game files, firmware or keys are included or
 > downloaded from unofficial sources. You add a disc image (`.iso`) you made from your own disc.
+>
+> ⚠️ **v1.2 (Beta) Pre-release now available:** Try the new hardware auto-configuration, PCIe 3.0 x8 fix, and expanded handheld &amp; racing wheel support on the [`beta`](../../tree/beta) branch or the [v1.2-beta Pre-release](../../releases/tag/v1.2-beta). **Not all PC hardware configurations, handhelds, and racing wheels have been tested and verified on physical hardware yet** — feedback and `.zip` log reports (**Log → Save current logs**) are very welcome.
 
 ---
 
@@ -82,9 +84,25 @@ On top of that comes a **patched emulator build** (below) that changes RPCS3 its
   <img src="docs/img/launcher.jpg" alt="Launcher" width="860">
 </p>
 
+## What's new in v1.2 (Beta)
+
+Available on the [`beta`](../../tree/beta) branch and as a [Pre-release (`v1.2-beta`)](../../releases/tag/v1.2-beta) (*note: **not all PC hardware configurations, handhelds, and racing wheels have been tested and verified on physical hardware yet***):
+
+* **⚡ Auto-configure for my PC & Restore:** Detects your CPU (selecting `RPCS3 Alternative Scheduler` on Intel hybrid CPUs), GPU tier, motherboard/PCIe link, and system RAM (`Mega` SPU block size when 7+ GiB RAM is detected, `Safe` otherwise) to configure optimal settings in one click, with a **Restore previous settings** button next to it.
+* **PCIe 3.0 x8 GPU Bottleneck Fix (Issue #36):** Automatically detects narrow-link PCIe x8/x4 GPUs (such as RTX 5060 / 4060 / 3050 / RX 7600 / 6600) on PCIe 3.0 motherboards (B450, B350, A320, etc.) and applies `Force CPU Blit` + `Speedboost (disable Write Color Buffers)` + `Disable MLAA` + `100% scale + FSR` + `Lamp glare 0` so races can run at a full 60 FPS without green edge artifacts.
+* **Expanded Handheld Controller Support:** Bundles community SDL `gamecontrollerdb.txt` mappings into RPCS3's `input_configs/` folder, adds runtime mapping synthesis as a fallback, prioritizes integrated handheld controls in Automatic mode, and labels handheld controllers (`Valve Steam Deck`, `ASUS ROG Ally / Ally X`, `Lenovo Legion Go / Go S / Z1E`, `MSI Claw / Claw A8`, `AMD Strix Halo`, `GPD`, `AYANEO`, `OneXPlayer`).
+* **Racing Wheel Setup Overhaul:**
+  * Supports **Logitech G923** and multi-device USB setups (separate pedals/shifters) with device selection and auto-switching inside the wizard.
+  * Fixes step advancement by waiting for the calibrated axis or button to return to rest before moving to the next step.
+  * Adds a live **Input level** bar and percentage readout (`0%–100%`) on axis steps so you can see wheel rotation and pedal travel as you calibrate.
+  * Fixes pedal axis polarity for **Thrustmaster** wheels (such as T150/T300 where released pedals rest at `+32767`).
+  * Adds a **Controls Review & Test** screen at the end of the wizard with live steering/pedal bars, button test, per-axis **Invert** checkboxes, plus a one-click **Invert pedals** button in the main Controls section.
+* **Graphics & Emulation Improvements:** Adds **Strict Rendering Mode** (fixes AMD hood reflection/strobe), **ZCULL Accuracy** selector (`Approximate`, `Relaxed`, `Precise`), keeps ZCull queries enabled by default, warns when selecting an integrated or low-VRAM GPU, and prevents mod installation until GT6 finishes unpacking first-boot `PDIPFS` data.
+* **Language Switcher & Better Diagnostics:** Adds dynamic **English / Simplified Chinese** switching, automatic abnormal-exit crash reports, direct-RPCS3-launch detection, and an updated **Log → Save current logs** exporter that saves a `.zip` archive (`system-info.txt`, `launcher.log`, `RPCS3.log` preserving both header and tail, and recent crash reports) with an **Open folder** button.
+
 ## Download
 
-Get **v1.1.3** from [Releases](../../releases):
+Get **v1.1.3 (Latest Stable)** from [Releases](../../releases/tag/v1.1.3), or test **v1.2 (Beta Pre-release)** from [Releases (`v1.2-beta`)](../../releases/tag/v1.2-beta):
 
 * **Linux (Ubuntu, Debian, Linux Mint, Pop!_OS, SteamOS & SDL2 distros):** `GT6-Launcher-Ubuntu-SDL2-x86_64.AppImage`. Built on Ubuntu 22.04 LTS (`GLIBC 2.35+`) with both SDL3 and SDL2 (`libSDL2-2.0.so.0`) gamepad/wheel support.
 * **Linux (Arch, CachyOS & rolling-release distros):** `GT6-Launcher-x86_64.AppImage`. Make it executable and start it.
