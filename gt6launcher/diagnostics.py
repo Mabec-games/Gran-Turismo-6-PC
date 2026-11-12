@@ -172,24 +172,70 @@ def _rpcs3_hardware() -> dict[str, str]:
 
 
 def _read_rpcs3_log_bytes(source: str) -> Optional[bytes]:
+    head_bytes = 32 * 1024
     try:
         with open(source, "rb") as src:
             src.seek(0, os.SEEK_END)
             size = src.tell()
-            start = max(0, size - _MAX_RPCS3_LOG_BYTES)
-            src.seek(start)
-            data = src.read()
-        if start:
-            header = (f"[Launcher included the last {_MAX_RPCS3_LOG_BYTES} bytes of the RPCS3 log; "
-                      f"{size - _MAX_RPCS3_LOG_BYTES} earlier bytes omitted.]\n\n").encode("utf-8")
-            return header + data
-        return data
+            if size <= _MAX_RPCS3_LOG_BYTES:
+                src.seek(0)
+                return src.read()
+            src.seek(0)
+            head = src.read(head_bytes)
+            tail_start = size - (_MAX_RPCS3_LOG_BYTES - head_bytes)
+            src.seek(tail_start)
+            tail = src.read()
+        omitted = tail_start - head_bytes
+        notice = (f"\n\n[... Launcher omitted {omitted} middle bytes of RPCS3.log; "
+                  f"kept first {head_bytes} bytes (hardware/config) and last {len(tail)} bytes ...]\n\n").encode("utf-8")
+        return head + notice + tail
     except OSError:
         return None
 
 
-def save_logs_archive(dest_zip: str, launcher_text: str) -> tuple[str, bool]:
-    """Bundle the current session's launcher log and RPCS3 log into a user-chosen .zip file."""
+def build_system_info_text(settings=None, entry=None) -> str:
+    """Collect host hardware specifications and launcher configuration for bug reports."""
+    from . import __version__, profile
+    cpu_info = profile.detect_cpu_info()
+    ram_gb = profile.detect_system_ram_gb()
+    rpcs3_hw = _rpcs3_hardware()
+    gpu_fallback = profile.detect_gpu_name()
+    gpu = rpcs3_hw["GPU"]
+    if gpu == "not reported by RPCS3" and gpu_fallback:
+        gpu = f"{gpu_fallback} (OS detected)"
+
+    lines = [
+        f"Launcher version: {__version__}",
+        f"Time: {datetime.now().astimezone().isoformat(timespec='seconds')}",
+        f"Operating system: {platform.platform()}",
+        f"Architecture: {platform.machine() or 'unknown'}",
+        f"Python: {platform.python_version()}",
+        f"CPU: {cpu_info.get('name') or rpcs3_hw['CPU']} ({cpu_info.get('threads', '?')} threads)",
+        f"Motherboard / DMI: {cpu_info.get('dmi_info') or 'unknown'}",
+        f"GPU: {gpu}",
+        f"RAM: {ram_gb:.1f} GiB" if ram_gb else f"RAM: {rpcs3_hw['RAM']}",
+        f"Handheld detected: {bool(cpu_info.get('is_handheld'))}",
+        f"PCIe narrow-link detected: {bool(cpu_info.get('is_pcie_bottleneck'))}",
+    ]
+    if entry is not None:
+        lines.append(f"Selected game: {entry.title_id} (version {entry.installed or '01.00'})")
+    if settings is not None:
+        lines += [
+            "",
+            "Active Launcher Settings:",
+            f"  renderer={settings.renderer}, gpu_adapter={settings.gpu_adapter or '(default)'}",
+            f"  output_resolution={settings.output_resolution}, resolution_scale={settings.resolution_scale}%",
+            f"  render_path={settings.render_path}, upscaler={settings.upscaler}, aa={settings.aa}",
+            f"  spu_block_size={settings.spu_block_size}, thread_scheduler={settings.thread_scheduler}",
+            f"  strict_rendering={settings.strict_rendering}, zcull_accuracy={settings.zcull_accuracy}, zcull_queries_disabled={settings.zcull_queries_disabled}",
+            f"  controller_mode={settings.controller_mode}, controller_device={settings.controller_device or '(auto)'}",
+            f"  wheel_enabled={settings.wheel_enabled}, wheel_name={settings.wheel_name or '(none)'}",
+        ]
+    return "\n".join(lines) + "\n"
+
+
+def save_logs_archive(dest_zip: str, launcher_text: str, settings=None, entry=None) -> tuple[str, bool]:
+    """Bundle current session logs, hardware specs, and recent crash reports into a .zip file."""
     if not dest_zip.lower().endswith(".zip"):
         dest_zip += ".zip"
     parent = os.path.dirname(os.path.abspath(dest_zip))
@@ -217,6 +263,7 @@ def save_logs_archive(dest_zip: str, launcher_text: str) -> tuple[str, bool]:
 
     tmp = dest_zip + ".tmp"
     with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("system-info.txt", build_system_info_text(settings=settings, entry=entry).encode("utf-8"))
         zf.writestr("launcher.log", launcher_bytes)
         if rpcs3_bytes is not None:
             zf.writestr("RPCS3.log", rpcs3_bytes)
@@ -224,6 +271,26 @@ def save_logs_archive(dest_zip: str, launcher_text: str) -> tuple[str, bool]:
         if os.path.isfile(origin_log):
             try:
                 zf.write(origin_log, "rpcs3-launch-origin.log")
+            except OSError:
+                pass
+        crashes_dir = os.path.join(paths.logs_dir(), "crashes")
+        if os.path.isdir(crashes_dir):
+            try:
+                crash_folders = sorted(
+                    [d for d in os.listdir(crashes_dir) if os.path.isdir(os.path.join(crashes_dir, d))],
+                    reverse=True,
+                )[:5]
+                for idx, folder_name in enumerate(crash_folders):
+                    cdir = os.path.join(crashes_dir, folder_name)
+                    report = os.path.join(cdir, "report.txt")
+                    if os.path.isfile(report):
+                        zf.write(report, f"crashes/{folder_name}/report.txt")
+                    if idx == 0:
+                        crash_rpcs3 = os.path.join(cdir, "RPCS3.log")
+                        if os.path.isfile(crash_rpcs3):
+                            crash_bytes = _read_rpcs3_log_bytes(crash_rpcs3)
+                            if crash_bytes is not None:
+                                zf.writestr(f"crashes/{folder_name}/RPCS3.log", crash_bytes)
             except OSError:
                 pass
     os.replace(tmp, dest_zip)

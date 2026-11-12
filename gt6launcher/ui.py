@@ -1040,11 +1040,13 @@ class MainWindow(QMainWindow):
         if not dest:
             return
         try:
-            zip_path, has_rpcs3 = diagnostics.save_logs_archive(dest, self.log_view.toPlainText())
+            zip_path, has_rpcs3 = diagnostics.save_logs_archive(
+                dest, self.log_view.toPlainText(), settings=self.s, entry=self.current()
+            )
         except OSError as e:
             QMessageBox.warning(self, tr("Save current logs"), f"{tr('Could not save logs:')} {e}")
             return
-        included = "launcher.log + RPCS3.log" if has_rpcs3 else "launcher.log"
+        included = "system-info.txt + launcher.log + RPCS3.log" if has_rpcs3 else "system-info.txt + launcher.log"
         box = QMessageBox(QMessageBox.Icon.Information, tr("Save current logs"),
                           f"{tr('Logs saved to:')}\n{zip_path}\n\n({included})",
                           QMessageBox.StandardButton.Ok, self)
