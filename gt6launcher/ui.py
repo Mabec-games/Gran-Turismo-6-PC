@@ -1264,12 +1264,17 @@ class MainWindow(QMainWindow):
             staged = [m.name for m in mods.KNOWN_MODS if mods.staged(m.id)]
             lines = [f"Imported: {', '.join(staged) or 'nothing yet'}",
                      f"Installed: {', '.join(mods.mod_by_id(m).name for m in stack) or 'none'}"]
+            data_ready = mods.game_data_ready(entry.title_id)
             if entry.installed != "01.22":
                 lines.append("Needs game version 1.22.")
-            elif not mods.game_data_ready(entry.title_id):
+                self.mod_install_btn.setToolTip("Gran Turismo 6 must be updated to version 1.22 to use mods.")
+            elif not data_ready:
                 lines.append("Start the game once (update data is unpacked on first boot), then install.")
+                self.mod_install_btn.setToolTip("Start the game once on version 1.22 so it can unpack its update data before installing mods.")
+            else:
+                self.mod_install_btn.setToolTip("")
             self.mod_lbl.setText("\n".join(lines))
-            self.mod_install_btn.setEnabled(bool(staged) and entry.installed == "01.22" and not stack)
+            self.mod_install_btn.setEnabled(bool(staged) and entry.installed == "01.22" and data_ready and not stack)
             self.mod_remove_btn.setEnabled(bool(stack))
         readme = os.path.join(paths.mods_dir(), "ReadMe - IMPORTANT.txt")
         if os.path.exists(readme) and not self.mod_readme.toPlainText():
@@ -1657,6 +1662,12 @@ class MainWindow(QMainWindow):
     def install_mods(self) -> None:
         entry = self.current()
         if not entry:
+            return
+        if not mods.game_data_ready(entry.title_id):
+            QMessageBox.warning(self, "Game not ready",
+                                "Start the game once on version 1.22 and wait for the main menu.\n\n"
+                                "Gran Turismo 6 unpacks its update data on the first boot (~20 mins). "
+                                "Mods can only be installed after this step completes.")
             return
 
         def work(job):
