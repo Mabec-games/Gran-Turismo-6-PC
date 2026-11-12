@@ -80,6 +80,7 @@ LANGUAGES = ["auto", "English (UK)", "English (US)", "German", "French", "Spanis
              "Danish", "Norwegian", "Japanese", "Korean", "Chinese (Traditional)", "Chinese (Simplified)"]
 SPU_BLOCK = ["Safe", "Mega", "Giga"]
 SCHEDULERS = ["Operating System", "RPCS3 Scheduler", "RPCS3 Alternative Scheduler"]
+ZCULL_ACCURACY = ["Approximate", "Relaxed", "Precise"]
 
 
 def detect_system_ram_gb() -> float:
@@ -151,7 +152,9 @@ class Settings:
     gpu_adapter: str = ""            # empty = RPCS3 default
     spu_block_size: str = field(default_factory=default_spu_block_size)
     thread_scheduler: str = "Operating System"
-    zcull_queries_disabled: bool = True
+    zcull_queries_disabled: bool = False
+    strict_rendering: bool = False
+    zcull_accuracy: str = "Approximate"
     render_path: str = "auto"       # never all three of WCB/RCB/CPU blit together (RPCS3 wiki)
     accurate_rsx_reservation: bool = True
     multithreaded_rsx: bool = False
@@ -260,6 +263,9 @@ def build_custom_config(s: Settings, version: str | None, title_id: str = "") ->
         "Read Color Buffers": cb,
         "Stretch To Display Area": ASPECTS.get(s.aspect) is not None,
         "Disable ZCull Occlusion Queries": s.zcull_queries_disabled,
+        "Strict Rendering Mode": s.strict_rendering,
+        "Relaxed ZCULL Sync": s.zcull_accuracy == "Relaxed",
+        "Accurate ZCULL stats": s.zcull_accuracy == "Precise",
         "Force CPU Blit": cpu_blit,
         "Handle RSX Memory Tiling": s.handle_tiled_memory,
         "Multithreaded RSX": s.multithreaded_rsx,
@@ -389,4 +395,5 @@ _CHOICES.update({
     "frame_mode": FRAME_MODES, "motion_blur": MOTION_BLUR, "shadows": SHADOWS, "spu_block_size": SPU_BLOCK,
     "thread_scheduler": SCHEDULERS, "render_path": RENDER_PATHS, "output_resolution": OUTPUT_RESOLUTIONS,
     "console_language": LANGUAGES, "controller_mode": ["auto", "pad", "keyboard", "manual"],
+    "zcull_accuracy": ZCULL_ACCURACY,
 })

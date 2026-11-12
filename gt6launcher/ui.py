@@ -740,9 +740,18 @@ class MainWindow(QMainWindow):
         f.addRow("", label(ram_hint, 9, name="muted"))
         self.ctl["thread_scheduler"] = self._combo(profile.SCHEDULERS, "thread_scheduler")
         f.addRow("Thread scheduler", self.ctl["thread_scheduler"])
+        self.ctl["zcull_accuracy"] = self._combo(profile.ZCULL_ACCURACY, "zcull_accuracy")
+        self.ctl["zcull_accuracy"].setToolTip(
+            "Approximate is the standard fast default.\n"
+            "Relaxed can resolve specific occlusion stalls.\n"
+            "Precise forces exact PS3 occlusion query calculations, eliminating residual car or shadow flickering."
+        )
+        f.addRow("ZCULL accuracy", self.ctl["zcull_accuracy"])
         for key, txt, tip in (
             ("zcull_queries_disabled", "Disable ZCull occlusion queries",
-             "Fixes reward-screen slowdowns and Garage car-image softlocks; may crackle audio in bumper cam."),
+             "Bypasses RSX occlusion queries. Keep unchecked: disabling causes cars to flicker and disappear on London, Madrid, Suzuka, and kart tracks."),
+            ("strict_rendering", "Strict rendering mode",
+             "Forces strict pipeline synchronization for render targets. Fixes hood reflections showing previous frames (e.g. Ford Focus ST) and Racing Gear menu flickering, especially on AMD GPUs."),
             ("accurate_rsx_reservation", "Accurate RSX reservation access", "Fewer RSX desyncs (recommended)."),
             ("multithreaded_rsx", "Multithreaded RSX", "Causes vertex explosions on cars in GT6 - keep off."),
             ("handle_tiled_memory", "Handle RSX memory tiling",
