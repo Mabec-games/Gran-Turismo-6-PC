@@ -2045,6 +2045,23 @@ class WheelWizard(QDialog):
         self.instr = label("", 13, True)
         self.instr.setMinimumHeight(70)
         calib_v.addWidget(self.instr)
+
+        self.axis_meter = QWidget()
+        axis_row = QHBoxLayout(self.axis_meter)
+        axis_row.setContentsMargins(0, 0, 0, 4)
+        axis_row.addWidget(label(tr("Input level:"), 9, name="muted"))
+        self.axis_bar = QProgressBar()
+        self.axis_bar.setRange(0, 100)
+        self.axis_bar.setValue(0)
+        self.axis_bar.setTextVisible(False)
+        self.axis_bar.setFixedHeight(14)
+        axis_row.addWidget(self.axis_bar, 1)
+        self.axis_pct_lbl = label("0%", 10, True)
+        self.axis_pct_lbl.setMinimumWidth(44)
+        self.axis_pct_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        axis_row.addWidget(self.axis_pct_lbl)
+        calib_v.addWidget(self.axis_meter)
+
         self.status = label("", 10, name="ok")
         calib_v.addWidget(self.status)
         v.addWidget(self.calib_container)
@@ -2100,6 +2117,9 @@ class WheelWizard(QDialog):
         key, text, kind, optional = self.STEPS[self.i]
         self.step_lbl.setText(f"Step {self.i + 1} of {len(self.STEPS)}")
         self.instr.setText(text)
+        self.axis_meter.setVisible(kind == "axis")
+        self.axis_bar.setValue(0)
+        self.axis_pct_lbl.setText("0%")
         self.status.setText("")
         self.skip_btn.setEnabled(optional)
         self.back_btn.setEnabled(self.i > 0)
@@ -2263,9 +2283,12 @@ class WheelWizard(QDialog):
                 self.base, self.phase = now, "wait"
             return
         if self.phase == "release":
-            if self.hit_control is not None and self._is_released(self.hit_control, now):
-                self.i += 1
-                self._start_step()
+            if self.hit_control is not None:
+                if self.hit_control.get("type") == "axis":
+                    self._update_axis_meter_release(self.hit_control, now)
+                if self._is_released(self.hit_control, now):
+                    self.i += 1
+                    self._start_step()
             return
         key, _text, kind, _opt = self.STEPS[self.i]
         exclude = set(self.used)
@@ -2287,6 +2310,8 @@ class WheelWizard(QDialog):
             self.status.setText("Choose the wheel or input device above before calibrating this control.")
             return
         allowed = {int(selected_device)} if selected_device is not None else None
+        if kind == "axis":
+            self._update_axis_meter_wait(now, exclude, allowed)
         hit = self.gp.detect_change(self.base, now, self.js.devices, kind, exclude, allowed)
         if not hit and allowed is not None:
             # Multi-device setups (separate USB shifter / pedals): if an input was made on
@@ -2306,6 +2331,8 @@ class WheelWizard(QDialog):
         m = {"device_type_id": hit["device_type_id"], "type": hit["type"], "id": hit["id"], "hat": hit["hat"],
              "reverse": False}
         if hit["type"] == "axis":
+            self.axis_bar.setValue(100)
+            self.axis_pct_lbl.setText("100%")
             if key == "steering":
                 # Steering: turning right must increase axis value
                 m["reverse"] = hit["moved"] < hit["rest"]
@@ -2336,6 +2363,48 @@ class WheelWizard(QDialog):
         what = f"{hit['type']} {hit['id']}" + (f" {hit['hat']}" if hit["hat"] else "")
         self.status.setText(f"OK - {what}. Release it...")
         self.phase = "release"
+
+    def _update_axis_meter_wait(self, now: list[dict], exclude: set, allowed: Optional[set[int]]) -> None:
+        """Show live axis movement as 0-100% of the capture threshold during axis calibration."""
+        threshold = 0x7FFF * 0.35
+        max_delta = 0.0
+        for di, (b, n) in enumerate(zip(self.base or [], now)):
+            tid = self.js.devices[di]["type_id"]
+            if allowed is not None and tid not in allowed:
+                continue
+            for i, (bv, nv) in enumerate(zip(b["axes"], n["axes"])):
+                if (tid, "axis", i) in exclude:
+                    continue
+                d = abs(nv - bv)
+                if d > max_delta:
+                    max_delta = d
+        if max_delta < threshold * 0.05 and allowed is not None:
+            for di, (b, n) in enumerate(zip(self.base or [], now)):
+                tid = self.js.devices[di]["type_id"]
+                for i, (bv, nv) in enumerate(zip(b["axes"], n["axes"])):
+                    if (tid, "axis", i) in exclude:
+                        continue
+                    d = abs(nv - bv)
+                    if d > max_delta:
+                        max_delta = d
+        pct = int(min(100, max(0, (max_delta / threshold) * 100)))
+        self.axis_bar.setValue(pct)
+        self.axis_pct_lbl.setText(f"{pct}%")
+
+    def _update_axis_meter_release(self, hit: dict, now: list[dict]) -> None:
+        """Show the captured axis returning to 0% as the user releases/centers it."""
+        for di, d in enumerate(self.js.devices):
+            if d["type_id"] == hit["device_type_id"] and di < len(now):
+                axes = now[di].get("axes", [])
+                idx = hit["id"]
+                if idx < len(axes):
+                    rest = hit.get("rest", 0)
+                    moved = hit.get("moved", 0)
+                    denom = max(abs(moved - rest), 0x7FFF * 0.35)
+                    pct = int(min(100, max(0, (abs(axes[idx] - rest) / denom) * 100)))
+                    self.axis_bar.setValue(pct)
+                    self.axis_pct_lbl.setText(f"{pct}%")
+                break
 
     def _is_released(self, hit: dict, now: list[dict]) -> bool:
         """Check if the specific control that was just calibrated has been released/centered."""

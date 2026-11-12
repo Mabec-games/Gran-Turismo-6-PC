@@ -301,6 +301,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Test your steering and pedals below. If any pedal is pressed when released, check 'Invert'.": "请在下方测试您的方向盘与踏板。如果任何踏板在松开时显示为被踩下，请勾选“反转”。",
         "Save & Finish": "保存并完成",
         "Steering": "方向盘转向",
+        "Input level:": "输入强度：",
         "Throttle": "油门",
         "Brake": "刹车",
         "Clutch": "离合器",
