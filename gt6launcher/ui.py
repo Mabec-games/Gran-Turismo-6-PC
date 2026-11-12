@@ -15,7 +15,7 @@ from PySide6.QtGui import (
     QColor, QDesktopServices, QFont, QIcon, QImage, QLinearGradient, QMovie, QPainter
 )
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QGroupBox,
+    QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QGridLayout, QGroupBox,
     QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPlainTextEdit,
     QProgressBar, QPushButton, QScrollArea, QSlider, QSpinBox, QSplitter, QTabWidget, QVBoxLayout, QWidget,
 )
@@ -507,12 +507,16 @@ class MainWindow(QMainWindow):
                           "Choose Keyboard explicitly to switch to keyboard input. Racing-game style "
                           "triggers (RT accelerate, LT brake): in the game, Options -> Wireless Controller.", 9, name="muted"))
         h = QHBoxLayout()
-        self.wheel_chk = QCheckBox("Use racing wheel")
+        self.wheel_chk = QCheckBox(tr("Use racing wheel"))
         self.wheel_chk.toggled.connect(self._on_wheel_toggled)
         h.addWidget(self.wheel_chk)
-        b = QPushButton("Set up wheel...")
+        b = QPushButton(tr("Set up wheel..."))
         b.clicked.connect(self.setup_wheel)
         h.addWidget(b)
+        self.invert_pedals_btn = QPushButton(tr("Invert pedals"))
+        self.invert_pedals_btn.setToolTip(tr("Invert throttle, brake, and clutch pedal polarity if they act as pressed when released."))
+        self.invert_pedals_btn.clicked.connect(self.invert_pedals)
+        h.addWidget(self.invert_pedals_btn)
         self.wheel_lbl = label("", 9, name="muted")
         h.addWidget(self.wheel_lbl, 1)
         f.addLayout(h)
@@ -586,6 +590,11 @@ class MainWindow(QMainWindow):
 
     def _update_wheel_label(self) -> None:
         m = self.s.wheel_mapping or {}
+        has_pedal_axes = any(
+            isinstance(m.get(k), dict) and m[k].get("type") == "axis" for k in ("throttle", "brake", "clutch")
+        )
+        if hasattr(self, "invert_pedals_btn"):
+            self.invert_pedals_btn.setEnabled(bool(has_pedal_axes))
         if m.get("steering"):
             n = len([k for k in m if m[k]])
             self.wheel_lbl.setText(f"{tr('Set up:')} {self.s.wheel_name or 'wheel'} ({n} controls mapped)")
@@ -594,6 +603,34 @@ class MainWindow(QMainWindow):
         self._loading = True
         self.wheel_chk.setChecked(bool(self.s.wheel_enabled and m.get("steering")))
         self._loading = False
+
+    def invert_pedals(self) -> None:
+        """Flip the reverse flag for all mapped pedal axes to quickly resolve inverted pedals."""
+        m = self.s.wheel_mapping or {}
+        if not m:
+            QMessageBox.information(self, tr("Racing wheel"), tr("No wheel mapping found. Please set up your wheel first."))
+            return
+        flipped = []
+        for pedal in ("throttle", "brake", "clutch"):
+            if pedal in m and isinstance(m[pedal], dict) and m[pedal].get("type") == "axis":
+                m[pedal]["reverse"] = not m[pedal].get("reverse", False)
+                status = tr("Inverted") if m[pedal]["reverse"] else tr("Normal")
+                pedal_name = tr(pedal.capitalize())
+                flipped.append(f"{pedal_name}: {status}")
+        if not flipped:
+            QMessageBox.information(self, tr("Racing wheel"), tr("No pedal axes found to invert."))
+            return
+        self.s.wheel_mapping = m
+        self.core.save()
+        on = bool(self.s.wheel_enabled and m.get("steering"))
+        from . import gamepad
+        gamepad.write_g27_config(m, on, ffb_device=int(m["steering"]["device_type_id"]) if on else 0)
+        self._update_wheel_label()
+        QMessageBox.information(
+            self,
+            tr("Racing wheel"),
+            tr("Pedal polarity updated:\n\n") + "\n".join(f"• {x}" for x in flipped)
+        )
 
     def _on_wheel_toggled(self, on: bool) -> None:
         if self._loading:
@@ -1974,7 +2011,7 @@ class WheelWizard(QDialog):
         from . import gamepad
         self.gp = gamepad
         self.js = gamepad.Joysticks()
-        self.setWindowTitle("Racing wheel set-up")
+        self.setWindowTitle(tr("Racing wheel set-up"))
         self.setMinimumWidth(560)
         self.mapping: dict = {}
         self.wheel_name = ""
@@ -1982,36 +2019,61 @@ class WheelWizard(QDialog):
         v = QVBoxLayout(self)
         self.devices_lbl = label("", 9, name="muted")
         v.addWidget(self.devices_lbl)
+
+        # Calibration controls container
+        self.calib_container = QWidget()
+        calib_v = QVBoxLayout(self.calib_container)
+        calib_v.setContentsMargins(0, 0, 0, 0)
+
         target_row = QHBoxLayout()
-        target_row.addWidget(label("Capture controls from:", 9, name="muted"))
+        target_row.addWidget(label(tr("Capture controls from:"), 9, name="muted"))
         self.device_box = QComboBox()
         self.device_box.setToolTip("Choose the wheel or another input device. Select a different device for separate USB pedals or shifters.")
         target_row.addWidget(self.device_box, 1)
-        self.refresh_devices_btn = QPushButton("Refresh")
+        self.refresh_devices_btn = QPushButton(tr("Refresh"))
         self.refresh_devices_btn.clicked.connect(self._rescan_devices)
         target_row.addWidget(self.refresh_devices_btn)
-        v.addLayout(target_row)
+        calib_v.addLayout(target_row)
         self.device_box.currentIndexChanged.connect(self._capture_device_changed)
         self._refresh_capture_devices()
+
         self.step_lbl = label("", 9, name="muted")
-        v.addWidget(self.step_lbl)
+        calib_v.addWidget(self.step_lbl)
         self.instr = label("", 13, True)
         self.instr.setMinimumHeight(70)
-        v.addWidget(self.instr)
+        calib_v.addWidget(self.instr)
         self.status = label("", 10, name="ok")
-        v.addWidget(self.status)
+        calib_v.addWidget(self.status)
+        v.addWidget(self.calib_container)
+
+        # Review & test container
+        self.review_container = QWidget()
+        self.review_layout = QVBoxLayout(self.review_container)
+        self.review_layout.setContentsMargins(0, 0, 0, 0)
+        self.review_bars: dict[str, QProgressBar] = {}
+        self.review_container.setVisible(False)
+        v.addWidget(self.review_container)
+
         h = QHBoxLayout()
-        self.back_btn = QPushButton("Back")
+        self.back_btn = QPushButton(tr("Back"))
         self.back_btn.clicked.connect(self._back)
         h.addWidget(self.back_btn)
         h.addStretch(1)
-        self.skip_btn = QPushButton("Skip")
+
+        self.finish_btn = QPushButton(tr("Save & Finish"))
+        self.finish_btn.setObjectName("accent")
+        self.finish_btn.clicked.connect(self._finish)
+        self.finish_btn.setVisible(False)
+        h.addWidget(self.finish_btn)
+
+        self.skip_btn = QPushButton(tr("Skip"))
         self.skip_btn.clicked.connect(self._skip)
         h.addWidget(self.skip_btn)
-        cancel = QPushButton("Cancel")
+        cancel = QPushButton(tr("Cancel"))
         cancel.clicked.connect(self.reject)
         h.addWidget(cancel)
         v.addLayout(h)
+
         self.i = 0
         self.phase = "arm"
         self.hit_control = None
@@ -2026,8 +2088,12 @@ class WheelWizard(QDialog):
                  + ("  (wheel)" if d["is_wheel"] else "") for d in self.js.devices]
         self.devices_lbl.setText("Detected: " + (", ".join(names) or "no controllers - connect your wheel"))
         if self.i >= len(self.STEPS):
-            self._finish()
+            self._show_review()
             return
+        self.calib_container.setVisible(True)
+        self.review_container.setVisible(False)
+        self.finish_btn.setVisible(False)
+        self.skip_btn.setVisible(True)
         key, text, kind, optional = self.STEPS[self.i]
         self.step_lbl.setText(f"Step {self.i + 1} of {len(self.STEPS)}")
         self.instr.setText(text)
@@ -2037,6 +2103,106 @@ class WheelWizard(QDialog):
         self.phase = "settle"
         self.settle_until = __import__("time").time() + 0.3
         self.base = None
+
+    def _show_review(self) -> None:
+        self.phase = "review"
+        self.calib_container.setVisible(False)
+        self.skip_btn.setVisible(False)
+        self.finish_btn.setVisible(True)
+        self.back_btn.setEnabled(True)
+
+        while self.review_layout.count():
+            item = self.review_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+
+        self.review_bars.clear()
+        self.review_layout.addWidget(label(tr("Controls Review & Test"), 13, True))
+        self.review_layout.addWidget(label(
+            tr("Test your steering and pedals below. If any pedal is pressed when released, check 'Invert'."),
+            9, name="muted"
+        ))
+
+        grid = QGridLayout()
+        row = 0
+        axes_to_show = [("steering", "Steering"), ("throttle", "Throttle"), ("brake", "Brake"), ("clutch", "Clutch")]
+        for key, title in axes_to_show:
+            m = self.mapping.get(key)
+            if not m or m.get("type") != "axis":
+                continue
+            grid.addWidget(label(tr(title), 10, True), row, 0)
+            bar = QProgressBar()
+            if key == "steering":
+                bar.setRange(-100, 100)
+                bar.setValue(0)
+                bar.setFormat("%v%")
+            else:
+                bar.setRange(0, 100)
+                bar.setValue(0)
+                bar.setFormat("%v%")
+            grid.addWidget(bar, row, 1)
+            self.review_bars[key] = bar
+
+            inv_chk = QCheckBox(tr("Invert"))
+            inv_chk.setChecked(bool(m.get("reverse", False)))
+            inv_chk.toggled.connect(lambda checked, k=key: self._set_mapping_reverse(k, checked))
+            grid.addWidget(inv_chk, row, 2)
+            row += 1
+
+        self.review_layout.addLayout(grid)
+        self.review_btn_lbl = label(tr("Buttons: press any mapped button to test"), 9, name="muted")
+        self.review_layout.addWidget(self.review_btn_lbl)
+        self.review_container.setVisible(True)
+
+    def _set_mapping_reverse(self, key: str, rev: bool) -> None:
+        if key in self.mapping:
+            self.mapping[key]["reverse"] = rev
+
+    def _update_review(self, now: list[dict]) -> None:
+        for k, bar in self.review_bars.items():
+            m = self.mapping.get(k)
+            if not m or m.get("type") != "axis":
+                continue
+            target_di = None
+            for di, d in enumerate(self.js.devices):
+                if d["type_id"] == m["device_type_id"]:
+                    target_di = di
+                    break
+            if target_di is None or target_di >= len(now):
+                continue
+            axes = now[target_di].get("axes", [])
+            axis_id = m["id"]
+            if axis_id >= len(axes):
+                continue
+            raw = axes[axis_id]
+            rev = m.get("reverse", False)
+            if rev:
+                raw = -raw
+            if k == "steering":
+                pct = int(max(-100, min(100, (raw / 32767.0) * 100)))
+                bar.setValue(pct)
+            else:
+                pct = int(max(0, min(100, (0x7FFF - raw) / 65535.0 * 100)))
+                bar.setValue(pct)
+
+        pressed_names = []
+        for k, m in self.mapping.items():
+            if m.get("type") != "button":
+                continue
+            target_di = None
+            for di, d in enumerate(self.js.devices):
+                if d["type_id"] == m["device_type_id"]:
+                    target_di = di
+                    break
+            if target_di is None or target_di >= len(now):
+                continue
+            buttons = now[target_di].get("buttons", [])
+            btn_id = m["id"]
+            if btn_id < len(buttons) and buttons[btn_id]:
+                pressed_names.append(k.upper())
+        if pressed_names:
+            self.review_btn_lbl.setText(f"{tr('Pressed')}: {', '.join(pressed_names)}")
 
     def _refresh_capture_devices(self) -> None:
         selected = self.device_box.currentData() if hasattr(self, "device_box") else None
@@ -2086,6 +2252,9 @@ class WheelWizard(QDialog):
             self._start_step()  # device appeared: show it and take a fresh baseline
             return
         now = self.js.state()
+        if self.phase == "review":
+            self._update_review(now)
+            return
         if self.phase == "settle":  # wait until the previous control is released, then take a baseline
             if time.time() >= self.settle_until:
                 self.base, self.phase = now, "wait"
@@ -2134,8 +2303,18 @@ class WheelWizard(QDialog):
         m = {"device_type_id": hit["device_type_id"], "type": hit["type"], "id": hit["id"], "hat": hit["hat"],
              "reverse": False}
         if hit["type"] == "axis":
-            # steering: turning right must increase; pedals: pressed must increase (released = minimum)
-            m["reverse"] = hit["moved"] < hit["rest"]
+            if key == "steering":
+                # Steering: turning right must increase axis value
+                m["reverse"] = hit["moved"] < hit["rest"]
+            else:
+                # Pedals (throttle, brake, clutch): in RPCS3's Logitech G27 emulation
+                # (LogitechG27.cpp), 0x00 is Pressed and 0xFF is Released.
+                # Released pedal must read as axis maximum (+32767), and pressed pedal
+                # must read as axis minimum (-32768).
+                # If pressing the pedal increases the axis value, it must be inverted (reverse = True).
+                # If pressing the pedal decreases the axis value (e.g. Thrustmaster T150/T300 resting
+                # at +32767 and moving to -32768), reverse must be False.
+                m["reverse"] = hit["moved"] > hit["rest"]
             self.used.add((hit["device_type_id"], "axis", hit["id"]))
         elif hit["type"] == "hat":
             self.used.add((hit["device_type_id"], "hat", hit["id"], hit["hat"]))
@@ -2201,16 +2380,31 @@ class WheelWizard(QDialog):
         self._start_step()
 
     def _back(self) -> None:
+        if self.phase == "review":
+            self.review_container.setVisible(False)
+            self.calib_container.setVisible(True)
+            self.finish_btn.setVisible(False)
+            self.skip_btn.setVisible(True)
+            self.i = len(self.STEPS) - 1
+            old = self.mapping.pop(self.STEPS[self.i][0], None)
+            if old:
+                self._rebuild_used()
+            self._start_step()
+            return
         if self.i > 0:
             self.i -= 1
             old = self.mapping.pop(self.STEPS[self.i][0], None)
             if old:
-                self.used = set()
-                for mapped in self.mapping.values():
-                    self.used.add((mapped["device_type_id"], mapped["type"], mapped["id"])
-                                  if mapped["type"] != "hat" else
-                                  (mapped["device_type_id"], "hat", mapped["id"], mapped["hat"]))
+                self._rebuild_used()
             self._start_step()
+
+    def _rebuild_used(self) -> None:
+        self.used = set()
+        for mapped in self.mapping.values():
+            if mapped.get("type") == "hat":
+                self.used.add((mapped["device_type_id"], "hat", mapped["id"], mapped.get("hat")))
+            else:
+                self.used.add((mapped["device_type_id"], mapped["type"], mapped["id"]))
 
     def _finish(self) -> None:
         self.timer.stop()

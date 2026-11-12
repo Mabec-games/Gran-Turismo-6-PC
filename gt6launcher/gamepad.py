@@ -311,8 +311,10 @@ def configure(mode: str, device: str = "", log=print) -> str:
 # RPCS3 emulates a Logitech G27 (natively supported by GT6) driven by any SDL joystick.
 # Its mapping file is <config>/LogitechG27.yml (Emu/Io/LogitechG27Config.h). Each control
 # names a device by "device_type_id" = num_buttons<<52 | num_hats<<42 | num_axes<<32 |
-# vendor<<16 | product, plus a button/hat/axis index. Pedal axes: released must read as the
-# axis minimum, so a pedal that rests at +32767 needs reverse: true.
+# vendor<<16 | product, plus a button/hat/axis index. Pedal axes: in RPCS3's Logitech G27
+# emulation (LogitechG27.cpp), 0x00 is Pressed and 0xFF is Released. Released pedal must
+# read as the axis maximum (+32767), and pressed pedal must read as the axis minimum (-32768).
+# Hence, pedals resting at +32767 (e.g. Thrustmaster T150/T300) need reverse: false.
 
 SDL_INIT_JOYSTICK = 0x00000200
 SDL_JOYSTICK_TYPE_WHEEL = 2

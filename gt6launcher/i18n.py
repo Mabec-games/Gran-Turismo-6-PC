@@ -288,5 +288,24 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Your previous settings have been restored.": "之前的设置已成功恢复。",
         "No previous settings backup was found.": "未找到之前的设置备份。",
         "Restore Settings": "恢复设置",
+
+        # Wheel Controls & Review
+        "Invert pedals": "反转踏板",
+        "Invert throttle, brake, and clutch pedal polarity if they act as pressed when released.": "如果踏板在松开时表现为完全踩下，反转油门、刹车和离合器踏板的极性。",
+        "No wheel mapping found. Please set up your wheel first.": "未找到方向盘配置。请先完成方向盘设置向导。",
+        "No pedal axes found to invert.": "未找到可反转的踏板轴。",
+        "Pedal polarity updated:\n\n": "踏板极性已更新：\n\n",
+        "Inverted": "已反转",
+        "Normal": "正常",
+        "Controls Review & Test": "控制器检查与测试",
+        "Test your steering and pedals below. If any pedal is pressed when released, check 'Invert'.": "请在下方测试您的方向盘与踏板。如果任何踏板在松开时显示为被踩下，请勾选“反转”。",
+        "Save & Finish": "保存并完成",
+        "Steering": "方向盘转向",
+        "Throttle": "油门",
+        "Brake": "刹车",
+        "Clutch": "离合器",
+        "Invert": "反转",
+        "Buttons: press any mapped button to test": "按键测试：按下任意已映射按键进行测试",
+        "Pressed": "已按下",
     }
 }
