@@ -1200,7 +1200,9 @@ class MainWindow(QMainWindow):
 
     def _update_hints(self) -> None:
         hints = []
-        if self.s.aa == "off" and self.s.resolution_scale < 200:
+        if self.s.render_path == "cpu_blit" and self.s.resolution_scale > 100:
+            hints.append(tr("Force CPU Blit: resolution scale above 100% causes a green edge band. Keep resolution scale at 100% and use FSR upscaling."))
+        elif self.s.render_path != "cpu_blit" and self.s.aa == "off" and self.s.resolution_scale < 200:
             hints.append(tr("No post AA: use 200% or more resolution, otherwise edges will shimmer."))
         if self.s.resolution_scale > 100 and self.s.motion_blur.startswith("gameplay"):
             hints.append(tr("Known issue: motion blur can flash green/magenta above 100% resolution."))

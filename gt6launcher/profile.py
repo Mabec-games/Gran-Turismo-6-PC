@@ -69,7 +69,7 @@ SHADOWS = {
 RENDER_PATHS = {
     "auto": "Automatic by game version (wiki: CPU blit up to 1.05, color buffers after)",
     "color_buffers": "Write + Read Color Buffers",
-    "cpu_blit": "Force CPU Blit (only correct up to 1.05)",
+    "cpu_blit": "Force CPU Blit (<= 1.05, or 1.22 with Speedboost for PCIe 3.0 x8 / narrow bus GPUs)",
 }
 LICENSE_AREA = {"BCES": "SCEE", "NPEA": "SCEE", "BCUS": "SCEA", "NPUA": "SCEA", "BCJS": "SCEJ", "NPJA": "SCEJ",
                 "BCAS": "SCEH", "NPHA": "SCEH", "BCKS": "SCEK"}
@@ -125,6 +125,47 @@ def default_spu_block_size() -> str:
     return "Safe" if ram < 7.0 else "Mega"
 
 
+def detect_gpu_pcie_bottleneck() -> bool:
+    """Return True if a discrete GPU is detected running on a narrow PCIe link (<= PCIe 3.0 x8, ~8GB/s)."""
+    if sys.platform == "linux":
+        try:
+            import glob
+            for dev in glob.glob("/sys/bus/pci/devices/*"):
+                class_path = os.path.join(dev, "class")
+                if os.path.isfile(class_path):
+                    with open(class_path, "r") as f:
+                        cls = f.read().strip()
+                    if cls.startswith("0x03"):
+                        speed_path = os.path.join(dev, "max_link_speed")
+                        if not os.path.isfile(speed_path):
+                            speed_path = os.path.join(dev, "current_link_speed")
+                        width_path = os.path.join(dev, "max_link_width")
+                        if not os.path.isfile(width_path):
+                            width_path = os.path.join(dev, "current_link_width")
+
+                        speed_val = 0.0
+                        if os.path.isfile(speed_path):
+                            with open(speed_path, "r") as f:
+                                for part in f.read().split():
+                                    try:
+                                        speed_val = float(part)
+                                        break
+                                    except ValueError:
+                                        pass
+                        width_val = 16
+                        if os.path.isfile(width_path):
+                            with open(width_path, "r") as f:
+                                try:
+                                    width_val = int(f.read().strip())
+                                except ValueError:
+                                    pass
+                        if 0 < speed_val <= 8.0 and width_val <= 8:
+                            return True
+        except Exception:
+            pass
+    return False
+
+
 def detect_cpu_info() -> dict[str, Any]:
     """Detect CPU model name, thread count, and architecture characteristics."""
     threads = os.cpu_count() or 4
@@ -140,7 +181,12 @@ def detect_cpu_info() -> dict[str, Any]:
         except Exception:
             pass
         try:
-            for dmi_file in ("/sys/devices/virtual/dmi/id/product_name", "/sys/devices/virtual/dmi/id/sys_vendor", "/sys/devices/virtual/dmi/id/board_name"):
+            for dmi_file in (
+                "/sys/devices/virtual/dmi/id/board_name",
+                "/sys/devices/virtual/dmi/id/product_name",
+                "/sys/devices/virtual/dmi/id/sys_vendor",
+                "/sys/devices/virtual/dmi/id/board_vendor",
+            ):
                 if os.path.isfile(dmi_file):
                     with open(dmi_file, "r", errors="replace") as f:
                         dmi_info += " " + f.read().strip()
@@ -157,8 +203,13 @@ def detect_cpu_info() -> dict[str, Any]:
         try:
             import winreg
             key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\BIOS")
-            dmi_val, _ = winreg.QueryValueEx(key, "SystemProductName")
-            dmi_info += " " + str(dmi_val).strip()
+            for subk in ("BaseBoardProduct", "SystemProductName", "BaseBoardManufacturer", "BIOSVersion"):
+                try:
+                    dmi_val, _ = winreg.QueryValueEx(key, subk)
+                    if dmi_val:
+                        dmi_info += " " + str(dmi_val).strip()
+                except Exception:
+                    pass
         except Exception:
             pass
     if not name:
@@ -184,6 +235,9 @@ def detect_cpu_info() -> dict[str, Any]:
         "threads": threads,
         "is_intel_hybrid": is_intel_hybrid,
         "is_handheld": is_handheld_cpu,
+        "board_name": dmi_info.strip(),
+        "dmi_info": dmi_info.strip(),
+        "is_pcie_bottleneck": detect_gpu_pcie_bottleneck(),
     }
 
 
@@ -193,14 +247,35 @@ def recommend_settings_for_hardware(cpu_info: dict[str, Any], gpu_name: str, ram
     threads = cpu_info.get("threads", 4)
     is_intel_hybrid = cpu_info.get("is_intel_hybrid", False)
     is_handheld_cpu = cpu_info.get("is_handheld", False)
-
+    dmi_info = cpu_info.get("dmi_info", "") or cpu_info.get("board_name", "")
+    dmi_l = dmi_info.lower()
+    cpu_l = cpu_name.lower()
     gpu_l = (gpu_name or "").lower()
+    is_pcie_bus_limited = cpu_info.get("is_pcie_bottleneck", False)
+
+    # Detect GPUs with narrow PCIe bus (e.g. x8 or x4 lanes: RTX 5060, 4060, 3050, RX 7600, 6600, etc.)
+    pcie_x8_gpus = ("5060", "4060", "3050", "7600", "6600", "6650", "6500", "6400", "5500", "a380", "a310")
+    is_pcie_x8_gpu = any(g in gpu_l for g in pcie_x8_gpus)
+
+    # Detect PCIe 3.0 / legacy motherboards or chipsets (AM4 PCIe 3.0: B450, B350, A320, X370, X470, A520; Intel LGA1151/1200 PCIe 3.0)
+    pcie3_chipsets = ("b450", "b350", "a320", "x370", "x470", "a520", "h310", "b360", "b365", "h370", "z370", "z390", "h410", "b460", "h470", "z490", "h510")
+    is_pcie3_board = any(c in dmi_l for c in pcie3_chipsets)
+
+    # Detect hardware configuration from Issue #36: RTX 5060 on B450 / ASUS PRIME B450M-K with AMD Ryzen 5 5600
+    is_issue36_exact = "5060" in gpu_l and ("5600" in cpu_l or "b450" in dmi_l or "prime b450m-k" in dmi_l)
+
+    # Narrow PCIe bus bottleneck (Issue #36): RSX thread saturated by color buffer readback over PCIe 3.0 x8 (~8 GB/s)
+    is_pcie_bandwidth_bottleneck = (
+        is_issue36_exact
+        or (is_pcie_x8_gpu and (is_pcie3_board or is_pcie_bus_limited))
+    )
+
     is_amd = any(x in gpu_l for x in ("amd", "radeon"))
     is_igpu = is_handheld_cpu or any(
         x in gpu_l for x in ("steam deck", "steamdeck", "vega", "660m", "680m", "740m", "760m", "780m", "uhd", "hd graphics", "iris")
     ) or ("graphics" in gpu_l and not any(x in gpu_l for x in ("rx ", "rtx", "gtx", "pro ", "xt")))
 
-    is_high_end = not is_igpu and any(
+    is_high_end = not is_igpu and not is_pcie_bandwidth_bottleneck and any(
         x in gpu_l for x in (
             "4090", "4080", "4070", "3090", "3080", "3070",
             "7900", "7800", "6950", "6900", "6800", "9060", "9070", "9080", "xtx"
@@ -228,7 +303,23 @@ def recommend_settings_for_hardware(cpu_info: dict[str, Any], gpu_name: str, ram
 
     # GPU & Visuals
     display_gpu = gpu_name or "Integrated Graphics"
-    if is_igpu:
+    if is_pcie_bandwidth_bottleneck:
+        settings["render_path"] = "cpu_blit"
+        settings["output_resolution"] = "1920x1080"
+        settings["resolution_scale"] = 100
+        settings["upscaler"] = "fsr"
+        settings["cas_sharpening"] = 60
+        settings["shadows"] = "sharp"
+        settings["aa"] = "off"
+        settings["lamp_glare"] = 0.0
+        settings["strict_rendering"] = False
+        settings["extra_patches"] = {"Speedboost (disable Write Color Buffers)": {"enabled": True, "values": {}}}
+        board_desc = "B450 / PCIe 3.0" if (is_pcie3_board or "b450" in dmi_l) else "PCIe 3.0 x8 bus"
+        summary.append(
+            f"GPU ({display_gpu}) on {board_desc} -> PCIe Bottleneck Fix (Issue #36): "
+            f"Force CPU Blit + Speedboost, 1080p, 100% Scale + FSR, MLAA Off, Glare 0 (solid 60 FPS)"
+        )
+    elif is_igpu:
         settings["output_resolution"] = "1280x720"
         settings["resolution_scale"] = 100
         settings["upscaler"] = "fsr"
@@ -477,6 +568,13 @@ def desired_patches(s: Settings, version: str | None) -> dict[str, dict[str, flo
         want["Use Sharper MLAA - Strong"] = {}
     elif s.aa == "off":
         want["Disable MLAA"] = {}
+    if s.render_path == "cpu_blit":
+        # Force CPU Blit on GT6 1.22: bypasses PCIe Write Color Buffer readback bottleneck (Issue #36).
+        # Requires Speedboost and Disable MLAA patches to avoid black 3D world and broken crowd sprites.
+        want["Speedboost (disable Write Color Buffers)"] = {}
+        want["Disable MLAA"] = {}
+        want.pop("Use Sharper MLAA", None)
+        want.pop("Use Sharper MLAA - Strong", None)
     ratio = ASPECTS.get(s.aspect)
     if ratio:
         want["Aspect Ratio"] = {"Aspect Ratio": ratio}
