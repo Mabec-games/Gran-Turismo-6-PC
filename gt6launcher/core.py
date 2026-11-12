@@ -477,12 +477,19 @@ class Core:
             # AMD
             "rx 550", "rx 560", "rx 460",
             "rx 6400", "rx 6500",
-            "r7 2", "r7 3", "r9 270", "r9 280", "r9 285", "r9 370", "r9 380",
+            "r7 250", "r7 260", "r7 265", "r7 350", "r7 360", "r7 370",
+            "r9 270", "r9 280", "r9 285", "r9 370", "r9 380",
             # Intel Arc
             "arc a310", "arc a380",
         )
         normalized = name.replace("geforce", "").replace("radeon", "")
-        if any(marker in name or marker in normalized for marker in low_vram_models):
+        # Model markers must not match a longer model number (e.g. RX 550
+        # must not classify RX 5500 XT, which is available with 8 GB).
+        if any(
+            re.search(rf"(?<![a-z0-9]){re.escape(marker)}(?!\d)", candidate)
+            for marker in low_vram_models
+            for candidate in (name, normalized)
+        ):
             return True, (
                 "Low VRAM GPU detected (< 6 GB). 6+ GB VRAM is recommended for GT6. "
                 "Keep resolution scale at 100% (720p/1080p) to avoid stuttering."

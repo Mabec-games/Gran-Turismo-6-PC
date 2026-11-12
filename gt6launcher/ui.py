@@ -291,16 +291,24 @@ class _TabsEasterEggFilter(QObject):
             pos = event.pos()
             corner_w = self.win.lang_btn.width() if hasattr(self.win, "lang_btn") else 110
             if obj is bar:
-                idx = bar.count() - 1
-                if idx >= 0:
-                    tab_right = bar.tabRect(idx).right()
+                last_idx = -1
+                for i in range(bar.count() - 1, -1, -1):
+                    if self.win.tabs.isTabVisible(i):
+                        last_idx = i
+                        break
+                if last_idx >= 0:
+                    tab_right = bar.tabRect(last_idx).right()
                     # Trigger in the empty bar area between last tab and language button
                     if tab_right < pos.x() < bar.width() - corner_w - 6:
                         self.win._play_easter_egg()
                         return True
             elif obj is self.win.tabs:
-                idx = bar.count() - 1
-                tab_right = bar.tabRect(idx).right() if idx >= 0 else 0
+                last_idx = -1
+                for i in range(bar.count() - 1, -1, -1):
+                    if self.win.tabs.isTabVisible(i):
+                        last_idx = i
+                        break
+                tab_right = bar.tabRect(last_idx).right() if last_idx >= 0 else 0
                 if 0 <= pos.y() <= bar.height() + 8 and tab_right < pos.x() < self.win.tabs.width() - corner_w - 12:
                     self.win._play_easter_egg()
                     return True
@@ -1072,6 +1080,12 @@ class MainWindow(QMainWindow):
             if idx < self.tabs.count():
                 self.tabs.setTabText(idx, i18n.tr(key, lang))
 
+        # Log tab is hidden when Chinese is selected
+        if self.tabs.count() > 6:
+            self.tabs.setTabVisible(6, lang != "zh_CN")
+            if lang == "zh_CN" and self.tabs.currentIndex() == 6:
+                self.tabs.setCurrentIndex(0)
+
         # Subheader and Play button
         from . import __version__
         if hasattr(self, "version_lbl"):
@@ -1809,9 +1823,13 @@ class MainWindow(QMainWindow):
     def _update_egg_btn_pos(self) -> None:
         if hasattr(self, "egg_btn") and hasattr(self, "tabs"):
             bar = self.tabs.tabBar()
-            idx = self.tabs.count() - 1
-            if idx >= 0:
-                rect = bar.tabRect(idx)
+            last_idx = -1
+            for i in range(bar.count() - 1, -1, -1):
+                if self.tabs.isTabVisible(i):
+                    last_idx = i
+                    break
+            if last_idx >= 0:
+                rect = bar.tabRect(last_idx)
                 bar_pos = bar.pos()
                 self.egg_btn.move(bar_pos.x() + rect.right() + 2, bar_pos.y() + rect.top())
                 self.egg_btn.show()
@@ -1847,12 +1865,12 @@ class WheelWizard(QDialog):
         ("triangle", "Press the button you want as  /\\  (Triangle).", "button", True),
         ("pause", "Press the button you want as START (pause menu).", "button", False),
         ("select", "Press the button you want as SELECT (change view).", "button", True),
-        ("up", "Press D-pad UP.", "button", True),
-        ("down", "Press D-pad DOWN.", "button", True),
-        ("left", "Press D-pad LEFT.", "button", True),
-        ("right", "Press D-pad RIGHT.", "button", True),
-        ("l2", "Press the button you want as L2 (look left / back).", "button", True),
-        ("r2", "Press the button you want as R2 (look right).", "button", True),
+        ("up", "Press D-pad UP.", "any", True),
+        ("down", "Press D-pad DOWN.", "any", True),
+        ("left", "Press D-pad LEFT.", "any", True),
+        ("right", "Press D-pad RIGHT.", "any", True),
+        ("l2", "Press the button you want as L2 (look left / back).", "any", True),
+        ("r2", "Press the button you want as R2 (look right).", "any", True),
         ("ps", "Press the button you want as the PS / Home button.", "button", True),
         ("shifter_1", "H-shifter: put it in 1st gear (Skip if you have no shifter - skips all gears).", "button", True),
         ("shifter_2", "H-shifter: 2nd gear.", "button", True),
@@ -1980,6 +1998,11 @@ class WheelWizard(QDialog):
         now = self.js.state()
         if self.phase == "settle":  # wait until the previous control is released, then take a baseline
             if time.time() >= self.settle_until:
+                has_active_btn = any(b for dev in now.values() for b in dev.get("buttons", []))
+                has_active_hat = any(h != 0 for dev in now.values() for h in dev.get("hats", []))
+                if has_active_btn or has_active_hat:
+                    self.settle_until = time.time() + 0.15
+                    return
                 self.base, self.phase = now, "wait"
             return
         if self.phase == "release":
@@ -1995,12 +2018,31 @@ class WheelWizard(QDialog):
             if other_pedal and other_pedal["type"] == "axis":
                 # Combined-pedal wheels expose accelerator and brake on opposite ends of one axis.
                 exclude.discard((other_pedal["device_type_id"], "axis", other_pedal["id"]))
+        if key in ("left", "right"):
+            other_dpad = self.mapping.get("right" if key == "left" else "left")
+            if other_dpad and other_dpad["type"] == "axis":
+                exclude.discard((other_dpad["device_type_id"], "axis", other_dpad["id"]))
+        if key in ("up", "down"):
+            other_dpad = self.mapping.get("down" if key == "up" else "up")
+            if other_dpad and other_dpad["type"] == "axis":
+                exclude.discard((other_dpad["device_type_id"], "axis", other_dpad["id"]))
         selected_device = self.device_box.currentData()
         if selected_device == "__select__":
             self.status.setText("Choose the wheel or input device above before calibrating this control.")
             return
         allowed = {int(selected_device)} if selected_device is not None else None
         hit = self.gp.detect_change(self.base, now, self.js.devices, kind, exclude, allowed)
+        if not hit and allowed is not None:
+            # Multi-device setups (separate USB shifter / pedals): if an input was made on
+            # another connected controller, auto-switch the device box to it.
+            other_hit = self.gp.detect_change(self.base, now, self.js.devices, kind, exclude, None)
+            if other_hit:
+                idx = self.device_box.findData(other_hit["device_type_id"])
+                if idx >= 0:
+                    self.device_box.blockSignals(True)
+                    self.device_box.setCurrentIndex(idx)
+                    self.device_box.blockSignals(False)
+                    hit = other_hit
         if not hit:
             return
         self.hit_device_type_id = hit["device_type_id"]

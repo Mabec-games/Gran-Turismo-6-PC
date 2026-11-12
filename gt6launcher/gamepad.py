@@ -27,9 +27,16 @@ def _load_sdl3() -> Optional[ctypes.CDLL]:
     names = []
     base = getattr(sys, "_MEIPASS", None)
     if paths.IS_WINDOWS:
+        exe_dir = os.path.dirname(sys.executable)
         if base:
-            names.append(os.path.join(base, "SDL3.dll"))
-        names += [os.path.join(os.path.dirname(sys.executable), "SDL3.dll"), "SDL3.dll"]
+            names += [os.path.join(base, "SDL3.dll"), os.path.join(base, "_internal", "SDL3.dll")]
+        names += [
+            os.path.join(exe_dir, "_internal", "SDL3.dll"),
+            os.path.join(exe_dir, "SDL3.dll"),
+            os.path.join(exe_dir, "rpcs3", "SDL3.dll"),
+            os.path.join(paths.rpcs3_windows_dir(), "SDL3.dll"),
+            "SDL3.dll",
+        ]
     else:
         if base:
             names += glob.glob(os.path.join(base, "libSDL3.so*"))
@@ -53,9 +60,16 @@ def _load_sdl2() -> Optional[ctypes.CDLL]:
     names = []
     base = getattr(sys, "_MEIPASS", None)
     if paths.IS_WINDOWS:
+        exe_dir = os.path.dirname(sys.executable)
         if base:
-            names.append(os.path.join(base, "SDL2.dll"))
-        names += [os.path.join(os.path.dirname(sys.executable), "SDL2.dll"), "SDL2.dll"]
+            names += [os.path.join(base, "SDL2.dll"), os.path.join(base, "_internal", "SDL2.dll")]
+        names += [
+            os.path.join(exe_dir, "_internal", "SDL2.dll"),
+            os.path.join(exe_dir, "SDL2.dll"),
+            os.path.join(exe_dir, "rpcs3", "SDL2.dll"),
+            os.path.join(paths.rpcs3_windows_dir(), "SDL2.dll"),
+            "SDL2.dll",
+        ]
     else:
         if base:
             names += glob.glob(os.path.join(base, "libSDL2*.so*"))
