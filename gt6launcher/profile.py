@@ -396,10 +396,13 @@ def recommend_settings_for_hardware(cpu_info: dict[str, Any], gpu_name: str, ram
         settings["resolution_scale"] = 200
         settings["upscaler"] = "bilinear"
         settings["shadows"] = "sharp"
-        settings["aa"] = "off"
+        # Keep MLAA on: "Disable MLAA" combined with resolution scale > 100% shows a green band / green
+        # image on 1.22 (Issues #36, #39).
+        settings["aa"] = "mlaa_sharp"
         settings["strict_rendering"] = is_amd
         amd_fix = ", Strict Rendering: ON (fixes AMD hood reflection/strobe)" if is_amd else ""
-        summary.append(f"GPU ({display_gpu}) -> High-End: 1080p output, 200% Scale (SSAA), Sharp Shadows{amd_fix}")
+        summary.append(f"GPU ({display_gpu}) -> High-End: 1080p output, 200% Scale + Sharper MLAA, "
+                       f"Sharp Shadows{amd_fix}")
     else:
         settings["output_resolution"] = "1920x1080"
         settings["resolution_scale"] = 150
