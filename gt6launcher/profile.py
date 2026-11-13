@@ -472,6 +472,7 @@ class Settings:
     wheel_enabled: bool = False
     wheel_name: str = ""
     wheel_mapping: dict[str, Any] = field(default_factory=dict)
+    wheel_reverse_ffb: bool = False
     # extras
     use_gamemode: bool = False
     use_mangohud: bool = False

@@ -338,7 +338,8 @@ class Core:
             self.log(gamepad.configure(self.settings.controller_mode, self.settings.controller_device, self.log))
             m = self.settings.wheel_mapping or {}
             on = bool(self.settings.wheel_enabled and m.get("steering"))
-            gamepad.write_g27_config(m, on, ffb_device=int(m["steering"]["device_type_id"]) if on else 0)
+            gamepad.write_g27_config(m, on, ffb_device=int(m["steering"]["device_type_id"]) if on else 0,
+                                     reverse_effects=self.settings.wheel_reverse_ffb)
             if on:
                 self.log(f"racing wheel: {self.settings.wheel_name} as Logitech G27")
         except Exception as e:  # never block a launch on controller detection

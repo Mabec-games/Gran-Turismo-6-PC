@@ -517,6 +517,10 @@ class MainWindow(QMainWindow):
         self.invert_pedals_btn.setToolTip(tr("Invert throttle, brake, and clutch pedal polarity if they act as pressed when released."))
         self.invert_pedals_btn.clicked.connect(self.invert_pedals)
         h.addWidget(self.invert_pedals_btn)
+        self.reverse_ffb_chk = QCheckBox(tr("Reverse FFB"))
+        self.reverse_ffb_chk.setToolTip(tr("Flip force feedback direction if the wheel snaps away from center or oscillates violently."))
+        self.reverse_ffb_chk.toggled.connect(self._on_reverse_ffb_toggled)
+        h.addWidget(self.reverse_ffb_chk)
         self.wheel_lbl = label("", 9, name="muted")
         h.addWidget(self.wheel_lbl, 1)
         f.addLayout(h)
@@ -603,6 +607,9 @@ class MainWindow(QMainWindow):
             self.wheel_lbl.setText(tr("Not set up yet."))
         self._loading = True
         self.wheel_chk.setChecked(bool(self.s.wheel_enabled and m.get("steering")))
+        if hasattr(self, "reverse_ffb_chk"):
+            self.reverse_ffb_chk.setEnabled(bool(m.get("steering")))
+            self.reverse_ffb_chk.setChecked(bool(self.s.wheel_reverse_ffb))
         self._loading = False
 
     def invert_pedals(self) -> None:
@@ -625,13 +632,26 @@ class MainWindow(QMainWindow):
         self.core.save()
         on = bool(self.s.wheel_enabled and m.get("steering"))
         from . import gamepad
-        gamepad.write_g27_config(m, on, ffb_device=int(m["steering"]["device_type_id"]) if on else 0)
+        gamepad.write_g27_config(m, on, ffb_device=int(m["steering"]["device_type_id"]) if on else 0,
+                                 reverse_effects=self.s.wheel_reverse_ffb)
         self._update_wheel_label()
         QMessageBox.information(
             self,
             tr("Racing wheel"),
             tr("Pedal polarity updated:\n\n") + "\n".join(f"• {x}" for x in flipped)
         )
+
+    def _on_reverse_ffb_toggled(self, on: bool) -> None:
+        if self._loading:
+            return
+        self.s.wheel_reverse_ffb = on
+        self.core.save()
+        m = self.s.wheel_mapping or {}
+        if m.get("steering"):
+            from . import gamepad
+            enabled = bool(self.s.wheel_enabled)
+            gamepad.write_g27_config(m, enabled, ffb_device=int(m["steering"]["device_type_id"]) if enabled else 0,
+                                     reverse_effects=on)
 
     def _on_wheel_toggled(self, on: bool) -> None:
         if self._loading:
@@ -1311,7 +1331,7 @@ class MainWindow(QMainWindow):
 
     # settings that 'Reset to recommended' (graphics / emulation) must not touch
     RESET_KEEP = ("lan_enabled", "lan_bind_address", "online_enabled", "extra_patches", "gpu_adapter",
-                  "controller_mode", "controller_device", "wheel_enabled", "wheel_name", "wheel_mapping",
+                  "controller_mode", "controller_device", "wheel_enabled", "wheel_name", "wheel_mapping", "wheel_reverse_ffb",
                   "console_language", "ui_language", "dev_menu", "fullscreen", "audio_format")
 
     def reset_profile(self) -> None:

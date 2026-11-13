@@ -180,7 +180,8 @@ HANDHELD_CONTROLLER_NAMES = (
     "steam deck", "steam virtual gamepad", "rog ally", "legion go", "legion controller", "msi claw",
     "claw controller", "gpd win", "ayaneo", "onexplayer", "aokzoe", "zotac zone", "handheld",
 )
-WHEEL_NAME_HINTS = ("wheel", "g923", "g29", "g920", "g27", "g25", "thrustmaster", "fanatec", "moza",
+WHEEL_NAME_HINTS = ("wheel", "rs50", "g pro", "pro racing", "logitech rs",
+                    "g923", "g29", "g920", "g27", "g25", "thrustmaster", "fanatec", "moza",
                     "simucube", "cammus", "logitech driving force", "pedal", "shifter")
 
 
@@ -272,7 +273,7 @@ def list_gamepads() -> Optional[list[str]]:
     sdl_pads = _sdl_gamepads()
     if sdl_pads is None and not paths.IS_WINDOWS:
         return None
-    all_pads = xi + (sdl_pads or [])
+    all_pads = [p for p in (xi + (sdl_pads or [])) if not is_wheel_name(p)]
     # Prioritize handheld controllers if connected
     handhelds = [p for p in all_pads if is_handheld_controller(p)]
     others = [p for p in all_pads if not is_handheld_controller(p)]
@@ -604,9 +605,7 @@ class Joysticks:
                      "vendor": s.SDL_GetJoystickVendor(h), "product": s.SDL_GetJoystickProduct(h),
                      "axes": s.SDL_GetNumJoystickAxes(h), "hats": s.SDL_GetNumJoystickHats(h),
                      "buttons": s.SDL_GetNumJoystickButtons(h)}
-                name_l = d["name"].lower()
-                d["is_wheel"] = (s.SDL_GetJoystickType(h) == SDL_JOYSTICK_TYPE_WHEEL or "wheel" in name_l
-                                 or any(w in name_l for w in ("g923", "g29", "g920", "g27", "g25", "thrustmaster", "fanatec", "moza", "simucube", "cammus")))
+                d["is_wheel"] = s.SDL_GetJoystickType(h) == SDL_JOYSTICK_TYPE_WHEEL or is_wheel_name(d["name"])
                 d["type_id"] = type_id(d["vendor"], d["product"], d["axes"], d["hats"], d["buttons"])
                 self.devices.append(d)
             if ids:
@@ -623,9 +622,7 @@ class Joysticks:
                      "vendor": s.SDL_JoystickGetVendor(h), "product": s.SDL_JoystickGetProduct(h),
                      "axes": s.SDL_JoystickNumAxes(h), "hats": s.SDL_JoystickNumHats(h),
                      "buttons": s.SDL_JoystickNumButtons(h)}
-                name_l = d["name"].lower()
-                d["is_wheel"] = (s.SDL_JoystickGetType(h) == SDL_JOYSTICK_TYPE_WHEEL or "wheel" in name_l
-                                 or any(w in name_l for w in ("g923", "g29", "g920", "g27", "g25", "thrustmaster", "fanatec", "moza", "simucube", "cammus")))
+                d["is_wheel"] = s.SDL_JoystickGetType(h) == SDL_JOYSTICK_TYPE_WHEEL or is_wheel_name(d["name"])
                 d["type_id"] = type_id(d["vendor"], d["product"], d["axes"], d["hats"], d["buttons"])
                 self.devices.append(d)
         return self.devices
@@ -695,9 +692,14 @@ def g27_config_path() -> str:
     return os.path.join(paths.rpcs3_settings_dir(), "LogitechG27.yml")
 
 
-def write_g27_config(mapping: dict[str, dict], enabled: bool, ffb_device: int = 0) -> str:
+PEDAL_KEYS = ("throttle", "brake", "clutch")
+
+
+def write_g27_config(mapping: dict[str, dict], enabled: bool, ffb_device: int = 0,
+                     reverse_effects: bool = False) -> str:
     """mapping: G27 key -> {device_type_id, type, id, hat, reverse}. Unmapped keys point to
-    device 0 (never present -> neutral / not pressed)."""
+    device 0 (never present -> neutral / not pressed). Unmapped pedals use reverse=True so
+    RPCS3 reports 0xFF (released) instead of 0x00 (100% pressed, which holds clutch down)."""
     cfg: dict = {}
     for k in G27_KEYS:
         m = mapping.get(k)
@@ -705,9 +707,10 @@ def write_g27_config(mapping: dict[str, dict], enabled: bool, ffb_device: int = 
             cfg[k] = {"device_type_id": int(m["device_type_id"]), "type": m["type"], "id": int(m["id"]),
                       "hat": m.get("hat", ""), "reverse": bool(m.get("reverse", False))}
         else:
-            cfg[k] = {"device_type_id": 0, "type": "button", "id": 0, "hat": "", "reverse": False}
-    cfg.update({"reverse_effects": False, "ffb_direction_type": "steering_axis", "compatibility_limit": 4,
-                "ffb_device_type_id": int(ffb_device), "led_device_type_id": 0, "enabled": bool(enabled)})
+            cfg[k] = {"device_type_id": 0, "type": "button", "id": 0, "hat": "", "reverse": k in PEDAL_KEYS}
+    cfg.update({"reverse_effects": bool(reverse_effects), "ffb_direction_type": "steering_axis",
+                "compatibility_limit": 4, "ffb_device_type_id": int(ffb_device),
+                "led_device_type_id": 0, "enabled": bool(enabled)})
     p = g27_config_path()
     atomic_write(p, dump_cfg(cfg))
     return p
