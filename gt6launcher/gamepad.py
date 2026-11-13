@@ -563,6 +563,9 @@ class Joysticks:
                     ("SDL_QuitSubSystem", [ctypes.c_uint32], None)):
                 fn = getattr(s, name)
                 fn.argtypes, fn.restype = args, res
+            self._init_state = _bind_optional(s, "SDL_GetJoystickAxisInitialState",
+                                              [ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_int16)],
+                                              ctypes.c_bool)
             if not _sdl_init(s, SDL_INIT_JOYSTICK):
                 raise RuntimeError("SDL joystick init failed")
         else:
@@ -584,6 +587,9 @@ class Joysticks:
                     ("SDL_QuitSubSystem", [ctypes.c_uint32], None)):
                 fn = getattr(s, name)
                 fn.argtypes, fn.restype = args, res
+            self._init_state = _bind_optional(s, "SDL_JoystickGetAxisInitialState",
+                                              [ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_int16)],
+                                              ctypes.c_int)
             if not _sdl2_init(s, SDL_INIT_JOYSTICK):
                 raise RuntimeError("SDL2 joystick init failed")
         self.devices: list[dict] = []
@@ -638,9 +644,19 @@ class Joysticks:
         for d in self.devices:
             h = d["handle"]
             out.append({"axes": [s.SDL_GetJoystickAxis(h, i) if self.sdl_ver == 3 else s.SDL_JoystickGetAxis(h, i) for i in range(d["axes"])],
+                        "reported": [self._axis_reported(h, i) for i in range(d["axes"])],
                         "hats": [s.SDL_GetJoystickHat(h, i) if self.sdl_ver == 3 else s.SDL_JoystickGetHat(h, i) for i in range(d["hats"])],
                         "buttons": [bool(s.SDL_GetJoystickButton(h, i) if self.sdl_ver == 3 else s.SDL_JoystickGetButton(h, i)) for i in range(d["buttons"])]})
         return out
+
+    def _axis_reported(self, h, axis: int) -> bool:
+        """False while SDL has not received any value for this axis yet (it then reads 0).
+        Some wheels on Windows (Logitech G923) only send their first report when something moves,
+        so their pedals read 0 until then and jump to their real rest value (#41)."""
+        fn = self._init_state
+        if fn is None:
+            return True
+        return bool(fn(h, axis, ctypes.byref(ctypes.c_int16(0))))
 
     def close_all(self) -> None:
         for d in self.devices:
@@ -653,6 +669,14 @@ class Joysticks:
     def close(self) -> None:
         self.close_all()
         self.sdl.SDL_QuitSubSystem(SDL_INIT_JOYSTICK)
+
+
+def _bind_optional(lib, name: str, args: list, res):
+    """Bind an SDL function that older SDL builds may not export; None if missing."""
+    fn = getattr(lib, name, None)
+    if fn is not None:
+        fn.argtypes, fn.restype = args, res
+    return fn
 
 
 HAT_BITS = {1: "up", 2: "right", 4: "down", 8: "left"}

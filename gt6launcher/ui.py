@@ -2149,6 +2149,10 @@ class WheelWizard(QDialog):
         self.finish_btn.setVisible(False)
         self.skip_btn.setVisible(True)
         key, text, kind, optional = self.STEPS[self.i]
+        # Restarting a step (Refresh, device change) must forget what this step already captured,
+        # otherwise a wrong capture stays in self.used and later steps ignore that axis (issue #41).
+        if self.mapping.pop(key, None) is not None:
+            self._rebuild_used()
         self.step_lbl.setText(f"Step {self.i + 1} of {len(self.STEPS)}")
         self.instr.setText(text)
         self.axis_meter.setVisible(kind == "axis")
@@ -2158,7 +2162,10 @@ class WheelWizard(QDialog):
         self.skip_btn.setEnabled(optional)
         self.back_btn.setEnabled(self.i > 0)
         self.phase = "settle"
-        self.settle_until = __import__("time").time() + 0.3
+        now = __import__("time").time()
+        self.settle_until = now + 0.3
+        self.settle_deadline = now + 2.0
+        self.settle_prev = None
         self.base = None
 
     def _show_review(self) -> None:
@@ -2313,7 +2320,14 @@ class WheelWizard(QDialog):
             self._update_review(now)
             return
         if self.phase == "settle":  # wait until the previous control is released, then take a baseline
-            if time.time() >= self.settle_until:
+            # Only take the baseline once every axis has held still for 0.3 s (max 2 s). Some wheels
+            # (G923 on Windows) report pedals as 0 until their first input report arrives; a baseline
+            # taken before that makes the pedal's jump to its rest value look like movement (#41).
+            t = time.time()
+            if self.settle_prev is not None and self._axes_moved(self.settle_prev, now):
+                self.settle_until = t + 0.3
+            self.settle_prev = now
+            if t >= self.settle_until or t >= self.settle_deadline:
                 self.base, self.phase = now, "wait"
             return
         if self.phase == "release":
@@ -2325,6 +2339,7 @@ class WheelWizard(QDialog):
                     self._start_step()
             return
         key, _text, kind, _opt = self.STEPS[self.i]
+        self._adopt_late_axes(now)
         exclude = set(self.used)
         if key in ("throttle", "brake"):
             other_pedal = self.mapping.get("brake" if key == "throttle" else "throttle")
@@ -2360,6 +2375,7 @@ class WheelWizard(QDialog):
                     hit = other_hit
         if not hit:
             return
+        self._fix_late_rest(hit, key)
         self.hit_device_type_id = hit["device_type_id"]
         self.hit_control = hit
         m = {"device_type_id": hit["device_type_id"], "type": hit["type"], "id": hit["id"], "hat": hit["hat"],
@@ -2503,6 +2519,47 @@ class WheelWizard(QDialog):
             if old:
                 self._rebuild_used()
             self._start_step()
+
+    def _adopt_late_axes(self, now: list[dict]) -> None:
+        """Issue #41 (G923 on Windows): SDL reads 0 for every axis until the device sends its first
+        report, which only happens when something moves. Turning the wheel then makes the pedals
+        jump from 0 to their rest value (an end of the range), which looked like a full pedal
+        movement and was captured as steering. When an axis reports for the first time at an end
+        of its range, take that value as its baseline instead of treating the jump as movement.
+        An axis that first reports somewhere in between is the one being moved; its rest value is
+        fixed up when it is captured (_fix_late_rest)."""
+        for b, n in zip(self.base or [], now):
+            was, isnow = b.get("reported"), n.get("reported")
+            if was is None or isnow is None:
+                continue
+            for i, (before, after) in enumerate(zip(was, isnow)):
+                if not before and after and abs(n["axes"][i]) >= 0x7FFF * 0.9:
+                    b["axes"][i] = n["axes"][i]
+                    was[i] = True
+
+    def _fix_late_rest(self, hit: dict, key: str) -> None:
+        """A pedal whose device had not reported at baseline reads 0 there, not its real rest
+        value. Pedals rest at one end of the range, the end opposite to where they were pressed."""
+        if hit.get("type") != "axis" or key not in ("throttle", "brake", "clutch"):
+            return
+        di = next((i for i, d in enumerate(self.js.devices) if d["type_id"] == hit["device_type_id"]), None)
+        if di is None or di >= len(self.base or []):
+            return
+        reported = self.base[di].get("reported")
+        if reported is None or hit["id"] >= len(reported) or reported[hit["id"]]:
+            return
+        hit["rest"] = -0x8000 if hit["moved"] > 0 else 0x7FFF
+
+    @staticmethod
+    def _axes_moved(prev: list[dict], now: list[dict]) -> bool:
+        """True if any axis changed by more than 5 % of its range between two snapshots."""
+        if len(prev) != len(now):
+            return True
+        for p, n in zip(prev, now):
+            for pv, nv in zip(p.get("axes", []), n.get("axes", [])):
+                if abs(nv - pv) > 0x7FFF * 0.05:
+                    return True
+        return False
 
     def _rebuild_used(self) -> None:
         self.used = set()
