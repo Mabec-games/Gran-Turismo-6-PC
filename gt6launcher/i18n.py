@@ -311,7 +311,5 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Handheld": "掌机",
         "Handheld Controller": "掌机手柄",
         "Force CPU Blit: resolution scale above 100% causes a green edge band. Keep resolution scale at 100% and use FSR upscaling.": "强制 CPU Blit：分辨率缩放超过 100% 会导致屏幕边缘出现绿色色带。请将分辨率缩放保持为 100% 并使用 FSR 提升清晰度。",
-        "Known issue: No post AA above 100% resolution can show a green band or green image (Issues #36, #39). Use Sharper MLAA, or keep 100% resolution with FSR upscaling.": "已知问题：关闭后处理抗锯齿且分辨率超过 100% 时，画面可能出现绿色色带或整体发绿（问题 #36、#39）。请使用锐化 MLAA，或保持 100% 分辨率并使用 FSR 放大。",
-        "No post AA at 100% resolution: edges will shimmer.": "100% 分辨率下关闭后处理抗锯齿：边缘会出现闪烁。",
     }
 }
