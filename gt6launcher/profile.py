@@ -40,7 +40,7 @@ AA_MODES = {
     "mlaa": "Stock MLAA",
     "mlaa_sharp": "Sharper MLAA (recommended)",
     "mlaa_strong": "Sharper MLAA - Strong",
-    "off": "No post AA (use with 200%+ resolution = SSAA)",
+    "off": "No post AA - skips GT6's post pass (sharpest, sky/clouds may band; use 200%+)",
 }
 UPSCALERS = {
     "bilinear": "Bilinear",
