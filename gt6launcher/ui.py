@@ -1245,6 +1245,10 @@ class MainWindow(QMainWindow):
             hints.append(tr("Known issue: motion blur can flash green/magenta above 100% resolution."))
         entry = self.current()
         cb, blit = profile.render_flags(self.s, entry.installed if entry else None)
+        if blit and not cb:
+            hints.append(tr("Force CPU Blit: cars bought or repainted in this mode get a black picture in the "
+                            "garage list, and the Paint / Pit Service previews stay black. Races are not affected. "
+                            "To fix a car's picture, repaint it once with Render path set to Automatic."))
         if cb and self.s.resolution_scale >= 250:
             hints.append(tr("Heavy: 250-300% with color buffers (needed on 1.22) can drop FPS and make the audio "
                             "crackle. 100-150% is recommended for a steady 60 FPS."))
