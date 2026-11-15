@@ -3,10 +3,15 @@ from __future__ import annotations
 
 from typing import Optional
 
+from .i18n_fr import STRINGS as _FR
+from .i18n_ja import STRINGS as _JA
+
 # List of supported languages: (code, display_label, english_name)
 LANGUAGES: list[tuple[str, str, str]] = [
     ("en", "🇬🇧 English", "English"),
     ("zh_CN", "🇨🇳 简体中文", "Simplified Chinese"),
+    ("fr", "🇫🇷 Français", "French"),
+    ("ja", "🇯🇵 日本語", "Japanese"),
 ]
 
 _CURRENT_LANG: str = "en"
@@ -313,3 +318,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Force CPU Blit: resolution scale above 100% causes a green edge band. Keep resolution scale at 100% and use FSR upscaling.": "强制 CPU Blit：分辨率缩放超过 100% 会导致屏幕边缘出现绿色色带。请将分辨率缩放保持为 100% 并使用 FSR 提升清晰度。",
     }
 }
+
+TRANSLATIONS["fr"] = _FR
+TRANSLATIONS["ja"] = _JA

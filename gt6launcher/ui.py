@@ -368,7 +368,7 @@ class MainWindow(QMainWindow):
         self.lang_btn = QPushButton(i18n.get_switch_button_label(self.s.ui_language))
         self.lang_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.lang_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.lang_btn.setToolTip("Switch language / 切换语言")
+        self.lang_btn.setToolTip("Switch language / 切换语言 / Changer de langue / 言語を切り替え")
         self.lang_btn.setStyleSheet(
             "QPushButton { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); "
             "border-radius: 6px; padding: 4px 10px; font-weight: 600; font-size: 9pt; color: #d6d6e2; margin-right: 6px; margin-top: 3px; } "
@@ -1147,7 +1147,7 @@ class MainWindow(QMainWindow):
         i18n.set_current_language(lang)
         if hasattr(self, "lang_btn"):
             self.lang_btn.setText(i18n.get_switch_button_label(lang))
-            self.lang_btn.setToolTip("Switch to English" if lang == "zh_CN" else "切换至简体中文")
+            self.lang_btn.setToolTip(f"{i18n.tr('Switch language', lang)} -> {i18n.get_switch_button_label(lang)}")
 
         # Re-translate group boxes
         for gb in self.findChildren(QGroupBox):
