@@ -57,7 +57,7 @@ class Core:
             self.rpcs3_path()
         self._migrate()
 
-    PROFILE_REV = 5
+    PROFILE_REV = 6
 
     def _migrate(self) -> None:
         rev = int(self.data.get("profile_rev", 1))
@@ -85,6 +85,10 @@ class Core:
             if self.data.get("profile", {}).get("spu_block_size") == "Safe":
                 from .profile import default_spu_block_size
                 self.settings.spu_block_size = default_spu_block_size()
+        if rev < 6 and "profile" in self.data:
+            # rev 6: v1.2 defaulted ZCull occlusion queries to on, which stalls the car delivery and
+            # part install screens at 1-5 fps (Issues #40, #42). Back to disabled for everyone.
+            self.settings.zcull_queries_disabled = True
         if rev != self.PROFILE_REV:
             self.data["profile_rev"] = self.PROFILE_REV
             self.save()

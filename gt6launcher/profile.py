@@ -414,7 +414,9 @@ def recommend_settings_for_hardware(cpu_info: dict[str, Any], gpu_name: str, ram
         summary.append(f"GPU ({display_gpu}) -> Mid-Range: 1080p output, 150% Scale, Sharp Shadows{amd_fix}")
 
     # Core stability settings
-    settings["zcull_queries_disabled"] = False
+    # ZCull queries off: with them on, the car delivery / part install screens stall at 1-5 fps
+    # (RSX semaphore_acquire timeouts, Issues #40, #42). RPCS3 wiki / AlexHaust recommendation.
+    settings["zcull_queries_disabled"] = True
     settings["zcull_accuracy"] = "Approximate"
     settings["accurate_rsx_reservation"] = True
     settings["handle_tiled_memory"] = True
@@ -451,7 +453,7 @@ class Settings:
     gpu_adapter: str = ""            # empty = RPCS3 default
     spu_block_size: str = field(default_factory=default_spu_block_size)
     thread_scheduler: str = "Operating System"
-    zcull_queries_disabled: bool = False
+    zcull_queries_disabled: bool = True   # see auto-config note (Issues #40, #42)
     strict_rendering: bool = False
     zcull_accuracy: str = "Approximate"
     render_path: str = "auto"       # never all three of WCB/RCB/CPU blit together (RPCS3 wiki)
