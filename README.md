@@ -102,6 +102,7 @@ On top of that comes a **patched emulator build** (below) that changes RPCS3 its
 
 ### Changes since v1.2-beta2
 
+* **New-version notice:** the launcher checks GitHub when it starts and shows a banner under the version number when any newer release is published (beta or stable, e.g. v1.2-beta4, v1.2, v1.4), with a **Download** link. It stays silent when offline. Works from this version on; older builds don't have it.
 * **Fixed 1–5 FPS on the car delivery and part install screens (Issues #40, #42):** *Disable ZCull occlusion queries* is on again by default and in **Auto-configure**. v1.2 Beta had turned the queries on, which made the emulator stall about once a second on these screens on both AMD and NVIDIA. Existing settings are switched over once on the first start; untick it under Advanced only if cars flicker on London / Madrid / the kart tracks.
 * **Steam Deck OLED:** now detected as a handheld, so **Auto-configure** picks the 720p handheld profile instead of 1080p / 150%.
 * **<img src="docs/img/flags/fr.png" width="20" height="15" alt="FR"> French and <img src="docs/img/flags/jp.png" width="20" height="15" alt="JP"> Japanese:** the language button now cycles <img src="docs/img/flags/gb.png" width="20" height="15" alt="GB"> English → <img src="docs/img/flags/cn.png" width="20" height="15" alt="CN"> 简体中文 → <img src="docs/img/flags/fr.png" width="20" height="15" alt="FR"> Français → <img src="docs/img/flags/jp.png" width="20" height="15" alt="JP"> 日本語.

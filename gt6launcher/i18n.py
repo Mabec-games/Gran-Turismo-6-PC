@@ -315,6 +315,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Pressed": "已按下",
         "Handheld": "掌机",
         "Handheld Controller": "掌机手柄",
+        # Launcher update notice
+        "New launcher": "新版启动器",
+        "beta": "测试版",
+        "release": "正式版",
+        "available": "已发布",
+        "Download": "下载",
+        "You have": "当前版本",
         "Force CPU Blit: resolution scale above 100% causes a green edge band. Keep resolution scale at 100% and use FSR upscaling.": "强制 CPU Blit：分辨率缩放超过 100% 会导致屏幕边缘出现绿色色带。请将分辨率缩放保持为 100% 并使用 FSR 提升清晰度。",
     }
 }

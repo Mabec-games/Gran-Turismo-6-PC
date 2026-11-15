@@ -54,6 +54,7 @@ QScrollArea > QWidget > QWidget {{ background: transparent; }}
 QLabel#muted {{ color: #9a9aa6; }}
 QLabel#warn {{ color: #ffb347; }}
 QLabel#ok {{ color: #6fdc8c; }}
+QLabel#update {{ color: #ffd27f; background: rgba(0,0,0,0.72); border: 1px solid #ffb347; border-radius: 6px; padding: 5px 8px; }}
 QSlider::groove:horizontal {{ height: 4px; background: rgba(255,255,255,0.15); border-radius: 2px; }}
 QSlider::handle:horizontal {{ width: 14px; margin: -6px 0; border-radius: 7px; background: {ACCENT}; }}
 QToolTip {{ background: #15151b; color: white; border: 1px solid #333; }}
@@ -153,6 +154,17 @@ def _on_gui(signal, fn: Callable, owner: QObject) -> "_Relay":
     r = _Relay(fn, owner)
     signal.connect(r.call)
     return r
+
+
+class _UpdateCheck(QObject):
+    """Asks GitHub for a newer launcher release on a worker thread."""
+    found = Signal(object)
+
+    def start(self) -> None:
+        def run() -> None:
+            from . import selfupdate
+            self.found.emit(selfupdate.check())
+        threading.Thread(target=run, name="launcher-update-check", daemon=True).start()
 
 
 class Job(QObject):
@@ -398,6 +410,25 @@ class MainWindow(QMainWindow):
         self.poll.start(1000)
         self._check_external_rpcs3_launch()
         QTimer.singleShot(200, self._first_run)
+        QTimer.singleShot(1500, self._start_update_check)
+
+    def _start_update_check(self) -> None:
+        self._update_check = _UpdateCheck(self)
+        self._update_relay = _on_gui(self._update_check.found, self._show_update, self)
+        self._update_check.start()
+
+    def _show_update(self, rel) -> None:
+        if not rel:
+            return
+        from html import escape
+        from . import __version__
+        kind = tr("beta") if rel.get("prerelease") else tr("release")
+        self.update_lbl.setText(
+            f'{tr("New launcher")} {kind} {escape(rel["tag"])} {tr("available")} - '
+            f'<a style="color:#ffffff; font-weight:700;" href="{escape(rel["url"], quote=True)}">{tr("Download")}</a>')
+        self.update_lbl.setToolTip(f'{tr("You have")} v{__version__}')
+        self.update_lbl.setVisible(True)
+        self._append_log(f"Launcher update available: {rel['tag']} (you have {__version__}) - {rel['url']}")
 
     # ------------------------------------------------------------------ left panel
     def _build_left(self) -> QWidget:
@@ -408,6 +439,12 @@ class MainWindow(QMainWindow):
         from . import __version__
         self.version_lbl = label(f"{tr('PC edition  ·  v')}{__version__}", 11, False, "muted")
         v.addWidget(self.version_lbl)
+        self.update_lbl = label("", 10, True, "update")
+        self.update_lbl.setTextFormat(Qt.TextFormat.RichText)
+        self.update_lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
+        self.update_lbl.setOpenExternalLinks(True)
+        self.update_lbl.setVisible(False)
+        v.addWidget(self.update_lbl)
         v.addStretch(1)
         self.game_box = QComboBox()
         self.game_box.currentIndexChanged.connect(self._on_game_changed)
