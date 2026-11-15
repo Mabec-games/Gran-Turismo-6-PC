@@ -78,6 +78,7 @@ On top of that comes a **patched emulator build** (below) that changes RPCS3 its
 | **Online** | The community GT6 server (EU disc) through RPCN, with login handled in the launcher. |
 | **Cheats** | GT6's own developer menu: set your credits with the *Cashier*, add cars. Single player only. |
 | **Right defaults per region** | The emulated console's region and language follow your disc. |
+| **New-version notice** | On start the launcher checks GitHub and shows a banner with a **Download** link whenever a newer release is out, beta or stable (from v1.2-beta3 on). Silent when offline. |
 | **Languages & diagnostics** | Dynamic language switcher: <img src="docs/img/flags/gb.png" width="20" height="15" alt="GB"> English / <img src="docs/img/flags/cn.png" width="20" height="15" alt="CN"> 简体中文 (Simplified Chinese) / <img src="docs/img/flags/fr.png" width="20" height="15" alt="FR"> Français (French) / <img src="docs/img/flags/jp.png" width="20" height="15" alt="JP"> 日本語 (Japanese), low-VRAM GPU warnings, automatic crash-report capture, and one-click `.zip` log export (**Log → Save current logs**). |
 
 <p align="center">
