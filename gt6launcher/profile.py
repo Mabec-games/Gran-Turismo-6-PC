@@ -171,7 +171,7 @@ def _is_handheld_platform(cpu_name: str, dmi_info: str = "") -> bool:
     combined_l = f"{cpu_name} {dmi_info}".lower()
     # Explicit substring matches (safe from chipset collisions like Z170/Z270)
     handheld_phrases = (
-        "custom apu 0405", "aerith", "sephiroth", "steam deck", "steamdeck", "valve jupiter", "valve galileo",
+        "custom apu 0405", "custom apu 0932", "aerith", "sephiroth", "vangogh", "steam deck", "steamdeck",
         "ryzen z1", "z1 extreme", "ryzen z2", "z2 extreme", "z2 go",
         "rog ally", "ally x", "rc71l", "rc72l",
         "legion go", "83e1", "83l3",
@@ -179,7 +179,12 @@ def _is_handheld_platform(cpu_name: str, dmi_info: str = "") -> bool:
         "strix halo", "ai max+ 395", "ai max 395", "ai max 388", "ai max 385", "ryzen ai max",
         "gpd win", "ayaneo", "onexplayer", "aokzoe", "zotac zone",
     )
-    return any(h in combined_l for h in handheld_phrases)
+    if any(h in combined_l for h in handheld_phrases):
+        return True
+    # Steam Deck: DMI is read as "board product vendor ..." = "Jupiter Jupiter Valve Valve" (LCD) or
+    # "Galileo Galileo Valve Valve" (OLED), so match the words independently of their order.
+    words = set(combined_l.split())
+    return "valve" in words and bool(words & {"jupiter", "galileo"})
 
 
 def detect_gpu_name() -> str:
@@ -332,7 +337,7 @@ def recommend_settings_for_hardware(cpu_info: dict[str, Any], gpu_name: str, ram
     is_discrete_gpu = any(x in gpu_l for x in ("rtx", "gtx", "rx ", "radeon pro", "arc a", "arc b", "arc(tm) a", "arc(tm) b", "quadro"))
     is_igpu = (not is_discrete_gpu) and (
         is_handheld_cpu
-        or any(x in gpu_l for x in ("steam deck", "steamdeck", "vega", "660m", "680m", "740m", "760m", "780m", "uhd", "hd graphics", "iris", "130v", "140v"))
+        or any(x in gpu_l for x in ("steam deck", "steamdeck", "vangogh", "custom gpu 0405", "custom gpu 0932", "vega", "660m", "680m", "740m", "760m", "780m", "uhd", "hd graphics", "iris", "130v", "140v"))
         or ("graphics" in gpu_l)
     )
 
