@@ -78,7 +78,7 @@ On top of that comes a **patched emulator build** (below) that changes RPCS3 its
 | **Online** | The community GT6 server (EU disc) through RPCN, with login handled in the launcher. |
 | **Cheats** | GT6's own developer menu: set your credits with the *Cashier*, add cars. Single player only. |
 | **Right defaults per region** | The emulated console's region and language follow your disc. |
-| **Languages & diagnostics** | Dynamic **English / Simplified Chinese / French / Japanese** language switcher, low-VRAM GPU warnings, automatic crash-report capture, and one-click `.zip` log export (**Log → Save current logs**). |
+| **Languages & diagnostics** | Dynamic language switcher: <img src="docs/img/flags/gb.png" width="20" height="15" alt="GB"> English / <img src="docs/img/flags/cn.png" width="20" height="15" alt="CN"> 简体中文 (Simplified Chinese) / <img src="docs/img/flags/fr.png" width="20" height="15" alt="FR"> Français (French) / <img src="docs/img/flags/jp.png" width="20" height="15" alt="JP"> 日本語 (Japanese), low-VRAM GPU warnings, automatic crash-report capture, and one-click `.zip` log export (**Log → Save current logs**). |
 
 <p align="center">
   <img src="docs/img/launcher.jpg" alt="Launcher" width="860">
@@ -98,13 +98,13 @@ On top of that comes a **patched emulator build** (below) that changes RPCS3 its
   * Adds a **Controls Review & Test** screen at the end of the wizard with live steering/pedal bars, button test, per-axis **Invert** checkboxes, plus one-click **Invert pedals** and **Reverse FFB** (`reverse_effects`) controls in the main Controls section (Issue #38).
 * **Graphics & Emulation Improvements:** Adds **Strict Rendering Mode** (fixes AMD hood reflection/strobe), **ZCULL Accuracy** selector (`Approximate`, `Relaxed`, `Precise`), disables ZCull occlusion queries by default (see below), warns when selecting an integrated or low-VRAM GPU, and prevents mod installation until GT6 finishes unpacking first-boot `PDIPFS` data.
 * **5.1 Surround Audio:** Advanced → **Audio output** offers **Stereo (2.0)** or **Surround 5.1** (RPCS3 `Audio Format`). Added in v1.2 Beta but missing from earlier notes.
-* **Language Switcher & Better Diagnostics:** Adds dynamic **English / Simplified Chinese / French / Japanese** switching, automatic abnormal-exit crash reports, direct-RPCS3-launch detection, and an updated **Log → Save current logs** exporter that saves a `.zip` archive (`system-info.txt`, `launcher.log`, `RPCS3.log` preserving both header and tail, and recent crash reports) with an **Open folder** button.
+* **Language Switcher & Better Diagnostics:** Adds dynamic language switching (<img src="docs/img/flags/gb.png" width="20" height="15" alt="GB"> English / <img src="docs/img/flags/cn.png" width="20" height="15" alt="CN"> 简体中文 (Simplified Chinese) / <img src="docs/img/flags/fr.png" width="20" height="15" alt="FR"> Français (French) / <img src="docs/img/flags/jp.png" width="20" height="15" alt="JP"> 日本語 (Japanese)), automatic abnormal-exit crash reports, direct-RPCS3-launch detection, and an updated **Log → Save current logs** exporter that saves a `.zip` archive (`system-info.txt`, `launcher.log`, `RPCS3.log` preserving both header and tail, and recent crash reports) with an **Open folder** button.
 
 ### Changes since v1.2-beta2
 
 * **Fixed 1–5 FPS on the car delivery and part install screens (Issues #40, #42):** *Disable ZCull occlusion queries* is on again by default and in **Auto-configure**. v1.2 Beta had turned the queries on, which made the emulator stall about once a second on these screens on both AMD and NVIDIA. Existing settings are switched over once on the first start; untick it under Advanced only if cars flicker on London / Madrid / the kart tracks.
 * **Steam Deck OLED:** now detected as a handheld, so **Auto-configure** picks the 720p handheld profile instead of 1080p / 150%.
-* **French and Japanese:** the language button now cycles English → 简体中文 → Français → 日本語.
+* **<img src="docs/img/flags/fr.png" width="20" height="15" alt="FR"> French and <img src="docs/img/flags/jp.png" width="20" height="15" alt="JP"> Japanese:** the language button now cycles <img src="docs/img/flags/gb.png" width="20" height="15" alt="GB"> English → <img src="docs/img/flags/cn.png" width="20" height="15" alt="CN"> 简体中文 → <img src="docs/img/flags/fr.png" width="20" height="15" alt="FR"> Français → <img src="docs/img/flags/jp.png" width="20" height="15" alt="JP"> 日本語.
 * **Racing wheel wizard:** no longer captures pedals as steering on wheels that report their axes late (Issue #41).
 * **Clearer graphics notes:** *Force CPU Blit* now warns that garage car pictures and Paint / Pit Service previews turn black (Issue #44), and *No post AA* explains that it skips GT6's whole post-process pass (Issue #39).
 
