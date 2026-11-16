@@ -25,6 +25,8 @@ from .core import Core, GT6_TITLES
 from .i18n import tr
 from .rpcs3 import RPCS3, STOCK_BUILD_WARNING, installed_version, is_patched_build
 
+# Game exit within this many seconds (code 0) with mods installed -> offer to uninstall them (#49).
+QUICK_EXIT_SECONDS = 60
 ACCENT = "#e0157a"
 STYLE = f"""
 * {{ color: #e9e9ee; font-size: 10pt; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans CN", "PingFang SC", sans-serif; }}
@@ -936,6 +938,9 @@ class MainWindow(QMainWindow):
         f.addLayout(h)
         f.addWidget(label("Every file a mod overwrites is backed up, so uninstalling restores the game exactly. "
                           "Start a new save when you first use the Career mod.", 9, name="muted"))
+        f.addWidget(label("Experimental: these mods do not work on every PC. If the game closes by itself right "
+                          "after starting, click 'Uninstall all mods' - the launcher also offers this automatically.",
+                          9, name="muted"))
         v.addWidget(g)
         g = QGroupBox("Cheats (single player)")
         f = QVBoxLayout(g)
@@ -1873,8 +1878,8 @@ class MainWindow(QMainWindow):
             return n
         self._run("Install mods", work, lambda n: self._append_log(f"installed {n} mod files"))
 
-    def uninstall_mods(self) -> None:
-        entry = self.current()
+    def uninstall_mods(self, entry=None) -> None:
+        entry = entry or self.current()
         if not entry:
             return
 
@@ -2002,10 +2007,32 @@ class MainWindow(QMainWindow):
                     self._append_log(f"[abnormal exit] diagnostic report saved: {report}")
                 except Exception as e:  # noqa: BLE001
                     self._append_log(f"[diagnostics failed] could not save crash report: {e}")
-            if __import__("time").time() - getattr(self, "_proc_started", 0) > 180:
+            ran_for = __import__("time").time() - getattr(self, "_proc_started", 0)
+            if ran_for > 180:
                 self.core.mark_compiled(self._proc_entry)
             self.proc = None
             self.refresh()
+            entry = self._proc_entry
+            if proc.returncode == 0 and ran_for < QUICK_EXIT_SECONDS and entry \
+                    and mods.installed_stack(entry.title_id):
+                QTimer.singleShot(0, lambda: self._offer_mod_uninstall(entry, ran_for))
+
+    def _offer_mod_uninstall(self, entry, ran_for: float) -> None:
+        """The game closed by itself within seconds while mods are installed (issue #49): on some PCs the
+        Spec II / Career mod files make GT6 quit right after boot. Offer the one-click restore."""
+        self._append_log(f"[mods] game closed after {ran_for:.0f} s with mods installed - offering uninstall")
+        box = QMessageBox(self)
+        box.setWindowTitle("Game closed right after starting")
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setText("Gran Turismo 6 closed by itself right after starting.")
+        box.setInformativeText("Mods are installed, and on some PCs the mods make the game close at start-up.\n\n"
+                               "Uninstall all mods now? The original game files are restored exactly and your "
+                               "save data is not touched. You can install the mods again later from the Mods tab.")
+        box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        box.button(QMessageBox.StandardButton.Yes).setText("Uninstall mods")
+        box.button(QMessageBox.StandardButton.No).setText("Keep mods")
+        if box.exec() == QMessageBox.StandardButton.Yes:
+            self.uninstall_mods(entry)
 
     def resizeEvent(self, e) -> None:
         super().resizeEvent(e)
