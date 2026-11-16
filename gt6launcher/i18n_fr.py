@@ -471,4 +471,24 @@ STRINGS: dict[str, str] = {
         "Garder les mods",
     "Experimental: these mods do not work on every PC. If the game closes by itself right after starting, click 'Uninstall all mods' - the launcher also offers this automatically.":
         "Expérimental : ces mods ne fonctionnent pas sur tous les PC. Si le jeu se ferme tout seul juste après le démarrage, cliquez sur 'Désinstaller tous les mods' - le launcher le propose aussi automatiquement.",
+    "Current internal target: approximately {w}x{h} ({scale}%).":
+        "Cible de rendu interne actuelle : environ {w}x{h} ({scale} %).",
+    "Current resolution scale: {scale}%.":
+        "Échelle de résolution actuelle : {scale} %.",
+    "not identified in an RPCS3 log yet":
+        "pas encore identifié dans un log RPCS3",
+    "Detected Vulkan GPU: {gpu}":
+        "GPU Vulkan détecté : {gpu}",
+    "Lowering the output resolution or internal resolution scale may help. This is an advisory only; you can continue if you want to try.":
+        "Baisser la résolution de sortie ou l'échelle de résolution interne peut aider. Ceci n'est qu'un avertissement ; vous pouvez continuer si vous voulez essayer.",
+    "Only {n} logical CPU thread(s) detected; GT6 needs at least a 4-core-class CPU.":
+        "Seulement {n} thread(s) CPU logique(s) détecté(s) ; GT6 nécessite au moins un CPU de classe 4 cœurs.",
+    "{ram} GiB RAM detected; 16 GiB is recommended to reduce memory pressure.":
+        "{ram} Gio de RAM détectés ; 16 Gio sont recommandés pour limiter la pression mémoire.",
+    "Integrated GPU detected (shared VRAM). A dedicated GPU with 6+ GB VRAM is recommended for GT6 to avoid stuttering.":
+        "GPU intégré détecté (VRAM partagée). Un GPU dédié avec 6 Go de VRAM ou plus est recommandé pour GT6 afin d'éviter les saccades.",
+    "Low VRAM GPU detected ({gb} GB). 6+ GB VRAM is recommended for GT6. Higher resolutions (1080p+ / 1440p) may stutter or run out of memory.":
+        "GPU avec peu de VRAM détecté ({gb} Go). 6 Go de VRAM ou plus sont recommandés pour GT6. Les résolutions élevées (1080p+ / 1440p) peuvent saccader ou manquer de mémoire.",
+    "Low VRAM GPU detected (< 6 GB). 6+ GB VRAM is recommended for GT6. Keep resolution scale at 100% (720p/1080p) to avoid stuttering.":
+        "GPU avec peu de VRAM détecté (< 6 Go). 6 Go de VRAM ou plus sont recommandés pour GT6. Gardez l'échelle de résolution à 100 % (720p/1080p) pour éviter les saccades.",
 }

@@ -330,6 +330,18 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Uninstall mods": "卸载模组",
         "Keep mods": "保留模组",
         "Experimental: these mods do not work on every PC. If the game closes by itself right after starting, click 'Uninstall all mods' - the launcher also offers this automatically.": "实验性功能：这些模组并非在所有电脑上都能正常运行。如果游戏启动后立即自行关闭，请点击“卸载全部模组”——启动器也会自动提示此操作。",
+        # Hardware advisory popup
+        "Current internal target: approximately {w}x{h} ({scale}%).": "当前内部渲染目标：约 {w}x{h} ({scale}%)。",
+        "Current resolution scale: {scale}%.": "当前分辨率缩放：{scale}%。",
+        "not identified in an RPCS3 log yet": "尚未在 RPCS3 日志中识别",
+        "Detected Vulkan GPU: {gpu}": "检测到的 Vulkan 显卡：{gpu}",
+        "Lowering the output resolution or internal resolution scale may help. This is an advisory only; you can continue if you want to try.": "降低输出分辨率或内部分辨率缩放可能会有所帮助。这只是一条提示，您仍可以继续尝试。",
+        # Hardware warnings
+        "Only {n} logical CPU thread(s) detected; GT6 needs at least a 4-core-class CPU.": "仅检测到 {n} 个逻辑 CPU 线程；《GT赛车6》至少需要四核级别的 CPU。",
+        "{ram} GiB RAM detected; 16 GiB is recommended to reduce memory pressure.": "检测到 {ram} GiB 内存；建议 16 GiB 以减轻内存压力。",
+        "Integrated GPU detected (shared VRAM). A dedicated GPU with 6+ GB VRAM is recommended for GT6 to avoid stuttering.": "检测到集成显卡（共享显存）。建议使用 6 GB 以上显存的独立显卡运行《GT赛车6》，以避免卡顿。",
+        "Low VRAM GPU detected ({gb} GB). 6+ GB VRAM is recommended for GT6. Higher resolutions (1080p+ / 1440p) may stutter or run out of memory.": "检测到低显存显卡（{gb} GB）。建议《GT赛车6》使用 6 GB 以上显存。较高分辨率（1080p 以上 / 1440p）可能会卡顿或显存不足。",
+        "Low VRAM GPU detected (< 6 GB). 6+ GB VRAM is recommended for GT6. Keep resolution scale at 100% (720p/1080p) to avoid stuttering.": "检测到低显存显卡（< 6 GB）。建议《GT赛车6》使用 6 GB 以上显存。请将分辨率缩放保持为 100%（720p/1080p）以避免卡顿。",
     }
 }
 

@@ -11,6 +11,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Callable, Optional
 
+from .i18n import tr
+
 from . import lan, mods, patches, paths
 from . import profile as profile_mod
 from .formats import GameImage, identify_folder, identify_iso
@@ -397,7 +399,7 @@ class Core:
         warnings = []
         threads = os.cpu_count()
         if threads is not None and threads < 4:
-            warnings.append(f"Only {threads} logical CPU thread(s) detected; GT6 needs at least a 4-core-class CPU.")
+            warnings.append(tr("Only {n} logical CPU thread(s) detected; GT6 needs at least a 4-core-class CPU.").format(n=threads))
 
         try:
             if paths.IS_WINDOWS:
@@ -418,7 +420,7 @@ class Core:
                 ram_bytes = os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")
             ram_gib = ram_bytes / (1024 ** 3)
             if ram_gib and ram_gib < 16:
-                warnings.append(f"{ram_gib:.1f} GiB RAM detected; 16 GiB is recommended to reduce memory pressure.")
+                warnings.append(tr("{ram} GiB RAM detected; 16 GiB is recommended to reduce memory pressure.").format(ram=f"{ram_gib:.1f}"))
         except (AttributeError, OSError, ValueError):
             pass
 
@@ -454,7 +456,7 @@ class Core:
         is_sw_or_other_igpu = any(x in name for x in ("apple m", "llvmpipe", "microsoft basic", "swiftshader"))
 
         if is_intel_igpu or is_amd_igpu or is_sw_or_other_igpu:
-            return True, (
+            return True, tr(
                 "Integrated GPU detected (shared VRAM). A dedicated GPU with 6+ GB VRAM "
                 "is recommended for GT6 to avoid stuttering."
             )
@@ -463,10 +465,10 @@ class Core:
         m = re.search(r"\b([1-4])\s*gb\b", name)
         if m:
             vram_num = m.group(1)
-            return True, (
-                f"Low VRAM GPU detected ({vram_num} GB). 6+ GB VRAM is recommended for GT6. "
+            return True, tr(
+                "Low VRAM GPU detected ({gb} GB). 6+ GB VRAM is recommended for GT6. "
                 "Higher resolutions (1080p+ / 1440p) may stutter or run out of memory."
-            )
+            ).format(gb=vram_num)
 
         # 3. Known low-VRAM (< 6 GB) dedicated GPUs
         low_vram_models = (
@@ -493,7 +495,7 @@ class Core:
             for marker in low_vram_models
             for candidate in (name, normalized)
         ):
-            return True, (
+            return True, tr(
                 "Low VRAM GPU detected (< 6 GB). 6+ GB VRAM is recommended for GT6. "
                 "Keep resolution scale at 100% (720p/1080p) to avoid stuttering."
             )

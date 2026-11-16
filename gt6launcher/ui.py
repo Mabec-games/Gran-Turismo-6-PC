@@ -1961,21 +1961,23 @@ class MainWindow(QMainWindow):
         if len(output) == 2 and all(part.isdigit() for part in output):
             width = int(int(output[0]) * self.s.resolution_scale / 100)
             height = int(int(output[1]) * self.s.resolution_scale / 100)
-            render_target = f"Current internal target: approximately {width}x{height} ({self.s.resolution_scale}%)."
+            render_target = tr("Current internal target: approximately {w}x{h} ({scale}%).").format(
+                w=width, h=height, scale=self.s.resolution_scale)
         else:
-            render_target = f"Current resolution scale: {self.s.resolution_scale}%."
+            render_target = tr("Current resolution scale: {scale}%.").format(scale=self.s.resolution_scale)
         adapters = self.core.gpu_adapters()
-        gpu = ", ".join(adapters) if adapters else "not identified in an RPCS3 log yet"
+        gpu = ", ".join(adapters) if adapters else tr("not identified in an RPCS3 log yet")
         box = QMessageBox(self)
-        box.setWindowTitle("Hardware may struggle with GT6")
+        box.setWindowTitle(tr("Hardware may struggle with GT6"))
         box.setIcon(QMessageBox.Icon.Warning)
-        box.setText("This PC may struggle to run Gran Turismo 6 smoothly.")
-        box.setInformativeText("\n".join(warnings) + f"\nDetected Vulkan GPU: {gpu}\n{render_target}\n\n"
-                               "Lowering the output resolution or internal resolution scale may help. "
-                               "This is an advisory only; you can continue if you want to try.")
+        box.setText(tr("This PC may struggle to run Gran Turismo 6 smoothly."))
+        box.setInformativeText("\n".join(warnings) + "\n" + tr("Detected Vulkan GPU: {gpu}").format(gpu=gpu)
+                               + f"\n{render_target}\n\n"
+                               + tr("Lowering the output resolution or internal resolution scale may help. "
+                                    "This is an advisory only; you can continue if you want to try."))
         box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
-        box.button(QMessageBox.StandardButton.Yes).setText("Continue")
-        box.button(QMessageBox.StandardButton.Cancel).setText("Cancel")
+        box.button(QMessageBox.StandardButton.Yes).setText(tr("Continue"))
+        box.button(QMessageBox.StandardButton.Cancel).setText(tr("Cancel"))
         return box.exec() == QMessageBox.StandardButton.Yes
 
     def _check_external_rpcs3_launch(self) -> None:

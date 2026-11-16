@@ -471,4 +471,24 @@ STRINGS: dict[str, str] = {
         "MOD を残す",
     "Experimental: these mods do not work on every PC. If the game closes by itself right after starting, click 'Uninstall all mods' - the launcher also offers this automatically.":
         "実験的機能：これらの MOD はすべての PC で動作するわけではありません。起動直後にゲームが自動で終了する場合は「すべての MOD をアンインストール」をクリックしてください。ランチャーも自動で提案します。",
+    "Current internal target: approximately {w}x{h} ({scale}%).":
+        "現在の内部レンダリング解像度：約 {w}x{h}（{scale}%）。",
+    "Current resolution scale: {scale}%.":
+        "現在の解像度スケール：{scale}%。",
+    "not identified in an RPCS3 log yet":
+        "RPCS3 ログでまだ特定されていません",
+    "Detected Vulkan GPU: {gpu}":
+        "検出された Vulkan GPU：{gpu}",
+    "Lowering the output resolution or internal resolution scale may help. This is an advisory only; you can continue if you want to try.":
+        "出力解像度または内部解像度スケールを下げると改善する場合があります。これは参考情報です。試したい場合はそのまま続行できます。",
+    "Only {n} logical CPU thread(s) detected; GT6 needs at least a 4-core-class CPU.":
+        "論理 CPU スレッドが {n} 個しか検出されません。GT6 には最低でも 4 コアクラスの CPU が必要です。",
+    "{ram} GiB RAM detected; 16 GiB is recommended to reduce memory pressure.":
+        "RAM {ram} GiB を検出しました。メモリ不足を避けるため 16 GiB を推奨します。",
+    "Integrated GPU detected (shared VRAM). A dedicated GPU with 6+ GB VRAM is recommended for GT6 to avoid stuttering.":
+        "内蔵 GPU を検出しました（共有 VRAM）。カクつきを避けるため、GT6 には VRAM 6 GB 以上の専用 GPU を推奨します。",
+    "Low VRAM GPU detected ({gb} GB). 6+ GB VRAM is recommended for GT6. Higher resolutions (1080p+ / 1440p) may stutter or run out of memory.":
+        "VRAM の少ない GPU を検出しました（{gb} GB）。GT6 には VRAM 6 GB 以上を推奨します。高解像度（1080p 以上 / 1440p）ではカクつきやメモリ不足が起こる場合があります。",
+    "Low VRAM GPU detected (< 6 GB). 6+ GB VRAM is recommended for GT6. Keep resolution scale at 100% (720p/1080p) to avoid stuttering.":
+        "VRAM の少ない GPU を検出しました（6 GB 未満）。GT6 には VRAM 6 GB 以上を推奨します。カクつきを避けるため、解像度スケールは 100%（720p/1080p）のままにしてください。",
 }
