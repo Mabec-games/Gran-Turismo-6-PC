@@ -323,6 +323,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Download": "下载",
         "You have": "当前版本",
         "Force CPU Blit: resolution scale above 100% causes a green edge band. Keep resolution scale at 100% and use FSR upscaling.": "强制 CPU Blit：分辨率缩放超过 100% 会导致屏幕边缘出现绿色色带。请将分辨率缩放保持为 100% 并使用 FSR 提升清晰度。",
+        # Mods quick-exit prompt (#49)
+        "Game closed right after starting": "游戏启动后立即关闭",
+        "Gran Turismo 6 closed by itself right after starting.": "《GT赛车6》在启动后立即自行关闭。",
+        "Mods are installed, and on some PCs the mods make the game close at start-up.\n\nUninstall all mods now? The original game files are restored exactly and your save data is not touched. You can install the mods again later from the Mods tab.": "当前已安装模组，在部分电脑上模组会导致游戏启动时关闭。\n\n现在卸载全部模组吗？原始游戏文件将被完整还原，存档数据不受影响。之后可以在“模组扩展”页面重新安装。",
+        "Uninstall mods": "卸载模组",
+        "Keep mods": "保留模组",
+        "Experimental: these mods do not work on every PC. If the game closes by itself right after starting, click 'Uninstall all mods' - the launcher also offers this automatically.": "实验性功能：这些模组并非在所有电脑上都能正常运行。如果游戏启动后立即自行关闭，请点击“卸载全部模组”——启动器也会自动提示此操作。",
     }
 }
 

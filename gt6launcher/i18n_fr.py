@@ -459,4 +459,16 @@ STRINGS: dict[str, str] = {
         "version",
     "Recommended. Fixes 1-5 fps on the car delivery and part install screens and Garage car-image softlocks. Untick only if cars flicker on London/Madrid/kart tracks; may crackle audio in bumper cam.":
         "Recommandé. Corrige les 1-5 FPS sur les écrans de livraison de voiture et d'installation de pièces ainsi que les blocages des images de voitures du Garage. Décochez seulement si des voitures clignotent sur Londres/Madrid/les circuits de karting ; peut faire grésiller l'audio en vue pare-chocs.",
+    "Game closed right after starting":
+        "Le jeu s'est fermé juste après le démarrage",
+    "Gran Turismo 6 closed by itself right after starting.":
+        "Gran Turismo 6 s'est fermé tout seul juste après le démarrage.",
+    "Mods are installed, and on some PCs the mods make the game close at start-up.\n\nUninstall all mods now? The original game files are restored exactly and your save data is not touched. You can install the mods again later from the Mods tab.":
+        "Des mods sont installés, et sur certains PC les mods font fermer le jeu au démarrage.\n\nDésinstaller tous les mods maintenant ? Les fichiers d'origine du jeu sont restaurés à l'identique et vos sauvegardes ne sont pas touchées. Vous pourrez réinstaller les mods plus tard depuis l'onglet Mods.",
+    "Uninstall mods":
+        "Désinstaller les mods",
+    "Keep mods":
+        "Garder les mods",
+    "Experimental: these mods do not work on every PC. If the game closes by itself right after starting, click 'Uninstall all mods' - the launcher also offers this automatically.":
+        "Expérimental : ces mods ne fonctionnent pas sur tous les PC. Si le jeu se ferme tout seul juste après le démarrage, cliquez sur 'Désinstaller tous les mods' - le launcher le propose aussi automatiquement.",
 }

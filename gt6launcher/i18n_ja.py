@@ -459,4 +459,16 @@ STRINGS: dict[str, str] = {
         "正式版",
     "Recommended. Fixes 1-5 fps on the car delivery and part install screens and Garage car-image softlocks. Untick only if cars flicker on London/Madrid/kart tracks; may crackle audio in bumper cam.":
         "推奨。車の納車画面とパーツ装着画面が 1〜5 FPS になる問題と、ガレージの車画像更新時のフリーズを修正します。ロンドン/マドリード/カートコースで車がちらつく場合のみオフにしてください。バンパー視点で音がプチプチ鳴ることがあります。",
+    "Game closed right after starting":
+        "起動直後にゲームが終了しました",
+    "Gran Turismo 6 closed by itself right after starting.":
+        "グランツーリスモ6 が起動直後に自動で終了しました。",
+    "Mods are installed, and on some PCs the mods make the game close at start-up.\n\nUninstall all mods now? The original game files are restored exactly and your save data is not touched. You can install the mods again later from the Mods tab.":
+        "MOD がインストールされています。一部の PC では、MOD が原因で起動時にゲームが終了します。\n\n今すぐすべての MOD をアンインストールしますか？元のゲームファイルがそのまま復元され、セーブデータには影響しません。MOD は後で「MOD」タブから再インストールできます。",
+    "Uninstall mods":
+        "MOD をアンインストール",
+    "Keep mods":
+        "MOD を残す",
+    "Experimental: these mods do not work on every PC. If the game closes by itself right after starting, click 'Uninstall all mods' - the launcher also offers this automatically.":
+        "実験的機能：これらの MOD はすべての PC で動作するわけではありません。起動直後にゲームが自動で終了する場合は「すべての MOD をアンインストール」をクリックしてください。ランチャーも自動で提案します。",
 }

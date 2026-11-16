@@ -2022,15 +2022,15 @@ class MainWindow(QMainWindow):
         Spec II / Career mod files make GT6 quit right after boot. Offer the one-click restore."""
         self._append_log(f"[mods] game closed after {ran_for:.0f} s with mods installed - offering uninstall")
         box = QMessageBox(self)
-        box.setWindowTitle("Game closed right after starting")
+        box.setWindowTitle(tr("Game closed right after starting"))
         box.setIcon(QMessageBox.Icon.Warning)
-        box.setText("Gran Turismo 6 closed by itself right after starting.")
-        box.setInformativeText("Mods are installed, and on some PCs the mods make the game close at start-up.\n\n"
+        box.setText(tr("Gran Turismo 6 closed by itself right after starting."))
+        box.setInformativeText(tr("Mods are installed, and on some PCs the mods make the game close at start-up.\n\n"
                                "Uninstall all mods now? The original game files are restored exactly and your "
-                               "save data is not touched. You can install the mods again later from the Mods tab.")
+                               "save data is not touched. You can install the mods again later from the Mods tab."))
         box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        box.button(QMessageBox.StandardButton.Yes).setText("Uninstall mods")
-        box.button(QMessageBox.StandardButton.No).setText("Keep mods")
+        box.button(QMessageBox.StandardButton.Yes).setText(tr("Uninstall mods"))
+        box.button(QMessageBox.StandardButton.No).setText(tr("Keep mods"))
         if box.exec() == QMessageBox.StandardButton.Yes:
             self.uninstall_mods(entry)
 
