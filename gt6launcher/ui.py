@@ -861,7 +861,7 @@ class MainWindow(QMainWindow):
         f.addRow("ZCULL accuracy", self.ctl["zcull_accuracy"])
         for key, txt, tip in (
             ("zcull_queries_disabled", "Disable ZCull occlusion queries",
-             "Recommended. Fixes 1-5 fps on the car delivery and part install screens and Garage car-image softlocks. Untick only if cars flicker on London/Madrid/kart tracks; may crackle audio in bumper cam."),
+             "Recommended - keep this on. Fixes 1-5 fps on the car delivery and part install screens and Garage car-image softlocks. Unticking it does not stop cars flickering on tracks like London. May crackle audio in bumper cam."),
             ("strict_rendering", "Strict rendering mode",
              "Forces strict pipeline synchronization for render targets. Fixes hood reflections showing previous frames (e.g. Ford Focus ST) and Racing Gear menu flickering, especially on AMD GPUs."),
             ("accurate_rsx_reservation", "Accurate RSX reservation access", "Fewer RSX desyncs (recommended)."),

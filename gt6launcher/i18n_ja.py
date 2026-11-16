@@ -457,8 +457,8 @@ STRINGS: dict[str, str] = {
         "ベータ版",
     "release":
         "正式版",
-    "Recommended. Fixes 1-5 fps on the car delivery and part install screens and Garage car-image softlocks. Untick only if cars flicker on London/Madrid/kart tracks; may crackle audio in bumper cam.":
-        "推奨。車の納車画面とパーツ装着画面が 1〜5 FPS になる問題と、ガレージの車画像更新時のフリーズを修正します。ロンドン/マドリード/カートコースで車がちらつく場合のみオフにしてください。バンパー視点で音がプチプチ鳴ることがあります。",
+    "Recommended - keep this on. Fixes 1-5 fps on the car delivery and part install screens and Garage car-image softlocks. Unticking it does not stop cars flickering on tracks like London. May crackle audio in bumper cam.":
+        "推奨 - オンのままにしてください。納車画面やパーツ装着画面で 1-5 FPS になる問題と、ガレージの車両画像の更新で固まる問題を修正します。オフにしても、ロンドンなどのコースで車がちらつく問題は直りません。バンパーカメラで音声がノイズ混じりになる場合があります。",
     "Game closed right after starting":
         "起動直後にゲームが終了しました",
     "Gran Turismo 6 closed by itself right after starting.":

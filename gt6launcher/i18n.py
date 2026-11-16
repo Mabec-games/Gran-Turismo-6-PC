@@ -342,6 +342,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Integrated GPU detected (shared VRAM). A dedicated GPU with 6+ GB VRAM is recommended for GT6 to avoid stuttering.": "检测到集成显卡（共享显存）。建议使用 6 GB 以上显存的独立显卡运行《GT赛车6》，以避免卡顿。",
         "Low VRAM GPU detected ({gb} GB). 6+ GB VRAM is recommended for GT6. Higher resolutions (1080p+ / 1440p) may stutter or run out of memory.": "检测到低显存显卡（{gb} GB）。建议《GT赛车6》使用 6 GB 以上显存。较高分辨率（1080p 以上 / 1440p）可能会卡顿或显存不足。",
         "Low VRAM GPU detected (< 6 GB). 6+ GB VRAM is recommended for GT6. Keep resolution scale at 100% (720p/1080p) to avoid stuttering.": "检测到低显存显卡（< 6 GB）。建议《GT赛车6》使用 6 GB 以上显存。请将分辨率缩放保持为 100%（720p/1080p）以避免卡顿。",
+        "Recommended - keep this on. Fixes 1-5 fps on the car delivery and part install screens and Garage car-image softlocks. Unticking it does not stop cars flickering on tracks like London. May crackle audio in bumper cam.": "推荐 - 请保持开启。修复交车画面和零件安装画面仅 1-5 FPS 的问题，以及车库车辆图片更新时卡死的问题。取消勾选并不能解决伦敦等赛道上车辆闪烁的问题。在保险杠视角下可能会出现音频爆音。",
     }
 }
 

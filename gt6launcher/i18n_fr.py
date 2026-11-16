@@ -457,8 +457,8 @@ STRINGS: dict[str, str] = {
         "bêta",
     "release":
         "version",
-    "Recommended. Fixes 1-5 fps on the car delivery and part install screens and Garage car-image softlocks. Untick only if cars flicker on London/Madrid/kart tracks; may crackle audio in bumper cam.":
-        "Recommandé. Corrige les 1-5 FPS sur les écrans de livraison de voiture et d'installation de pièces ainsi que les blocages des images de voitures du Garage. Décochez seulement si des voitures clignotent sur Londres/Madrid/les circuits de karting ; peut faire grésiller l'audio en vue pare-chocs.",
+    "Recommended - keep this on. Fixes 1-5 fps on the car delivery and part install screens and Garage car-image softlocks. Unticking it does not stop cars flickering on tracks like London. May crackle audio in bumper cam.":
+        "Recommandé - laissez activé. Corrige les 1-5 FPS sur les écrans de livraison de voiture et d'installation de pièces ainsi que les blocages des images de voitures du Garage. Le décocher n'empêche pas les voitures de clignoter sur des circuits comme Londres. Peut faire grésiller l'audio en vue pare-chocs.",
     "Game closed right after starting":
         "Le jeu s'est fermé juste après le démarrage",
     "Gran Turismo 6 closed by itself right after starting.":
