@@ -502,13 +502,56 @@ def configure(mode: str, device: str = "", log=print) -> str:
         new = {"Handler": "XInput" if device.startswith(XINPUT_PREFIX) else "SDL", "Device": device}
     else:
         new = {"Handler": "Keyboard", "Device": "Keyboard"}
+    changed = False
     if p1.get("Handler") != new["Handler"] or p1.get("Device") != new["Device"]:
         # handler changed -> drop the old button map so RPCS3 applies the new handler's defaults
-        p1 = new
-        cfg["Player 1 Input"] = p1
-        atomic_write(input_config_path(), dump_cfg(cfg))
+        cfg["Player 1 Input"] = new
+        changed = True
         log(f"controller: player 1 -> {new['Handler']} / {new['Device']}")
-    return f"Player 1: {new['Device']}" if new["Handler"] != "Keyboard" else "Player 1: keyboard (no gamepad found)"
+    # Player 2 for GT6's 2-player split screen (Arcade): the next physical pad, if any.
+    # Only written when a second pad is found, so a single-pad setup is left untouched.
+    p2_dev = second_player_pad(pads or [], new["Device"])
+    if p2_dev:
+        p2_new = {"Handler": "XInput" if p2_dev.startswith(XINPUT_PREFIX) else "SDL", "Device": p2_dev}
+        p2 = cfg.get("Player 2 Input", {}) or {}
+        if p2.get("Handler") != p2_new["Handler"] or p2.get("Device") != p2_new["Device"]:
+            cfg["Player 2 Input"] = p2_new
+            changed = True
+            log(f"controller: player 2 -> {p2_new['Handler']} / {p2_new['Device']}")
+    if changed:
+        atomic_write(input_config_path(), dump_cfg(cfg))
+    desc = f"Player 1: {new['Device']}" if new["Handler"] != "Keyboard" else "Player 1: keyboard (no gamepad found)"
+    if p2_dev:
+        desc = desc.replace(" (no gamepad found)", "") + f", Player 2: {p2_dev}"
+    return desc
+
+
+_XINPUT_SDL_HINTS = ("xbox", "xinput")
+
+
+def second_player_pad(pads: list[str], p1_device: str) -> Optional[str]:
+    """Pick Player 2's device: the first pad that is a different physical controller from Player 1.
+
+    On Windows an Xbox-style pad shows up twice, as 'XInput Pad #N' and again through SDL
+    ('Xbox 360 Controller 1', 'XInput Controller 1'...). For every XInput slot, one Xbox-looking
+    SDL entry is treated as that same pad and skipped."""
+    xi = [p for p in pads if p.startswith(XINPUT_PREFIX)]
+    dupes_left = len(xi)
+    unique = list(xi)
+    for p in pads:
+        if p.startswith(XINPUT_PREFIX):
+            continue
+        if dupes_left and any(h in p.lower() for h in _XINPUT_SDL_HINTS):
+            dupes_left -= 1
+            continue
+        unique.append(p)
+    # Player 1 on an SDL Xbox name (picked by hand) is also the first XInput slot's pad
+    if p1_device and not p1_device.startswith(XINPUT_PREFIX) and any(h in p1_device.lower() for h in _XINPUT_SDL_HINTS) and xi:
+        unique = [p for p in unique if p != xi[0]]
+    for p in unique:
+        if p != p1_device:
+            return p
+    return None
 
 
 # =========================================================================== racing wheels
