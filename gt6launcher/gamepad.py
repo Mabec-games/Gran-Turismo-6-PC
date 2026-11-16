@@ -478,6 +478,45 @@ def current_player1() -> tuple[str, str]:
     return str(p.get("Handler", "")), str(p.get("Device", ""))
 
 
+# RPCS3's keyboard handler defaults (keyboard_pad_handler::init_config) and what each PS3 button does in GT6.
+# Read-only: used to show the key table; the launcher never writes these keys.
+KEYBOARD_KEYS = (
+    ("Cross", "X", "Confirm / accelerate"),
+    ("Circle", "C", "Back"),
+    ("Square", "Z", "Brake"),
+    ("Triangle", "V", ""),
+    ("Start", "Enter", "Pause / start race"),
+    ("Select", "Space", ""),
+    ("Left Stick Left", "A", "Steer left"),
+    ("Left Stick Right", "D", "Steer right"),
+    ("Up", "Up", "Menu up"),
+    ("Down", "Down", "Menu down"),
+    ("Left", "Left", "Menu left"),
+    ("Right", "Right", "Menu right"),
+    ("L1", "Q", ""),
+    ("R1", "E", ""),
+    ("L2", "R", ""),
+    ("R2", "T", ""),
+    ("PS Button", "Backspace", ""),
+)
+
+
+def keyboard_key_table() -> tuple[bool, list[tuple[str, str, str]]]:
+    """(keyboard_active, rows of (PS3 button, key(s), GT6 action)). Keys come from Player 1's saved
+    RPCS3 keyboard map when it has one, else RPCS3's defaults. Never modifies the config."""
+    try:
+        p1 = load_cfg(input_config_path()).get("Player 1 Input", {}) or {}
+    except Exception:  # noqa: BLE001 - display only
+        p1 = {}
+    active = p1.get("Handler") == "Keyboard"
+    saved = (p1.get("Config") or {}) if active else {}
+    rows = []
+    for button, default, action in KEYBOARD_KEYS:
+        key = str(saved.get(button) or default)
+        rows.append((button, key.replace(",", " / "), action))
+    return active, rows
+
+
 def configure(mode: str, device: str = "", log=print) -> str:
     """mode: 'auto' (first gamepad, else keyboard), 'pad' (given device), 'keyboard',
     'manual' (leave RPCS3's own input config alone). Returns a description."""

@@ -343,6 +343,23 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Low VRAM GPU detected ({gb} GB). 6+ GB VRAM is recommended for GT6. Higher resolutions (1080p+ / 1440p) may stutter or run out of memory.": "检测到低显存显卡（{gb} GB）。建议《GT赛车6》使用 6 GB 以上显存。较高分辨率（1080p 以上 / 1440p）可能会卡顿或显存不足。",
         "Low VRAM GPU detected (< 6 GB). 6+ GB VRAM is recommended for GT6. Keep resolution scale at 100% (720p/1080p) to avoid stuttering.": "检测到低显存显卡（< 6 GB）。建议《GT赛车6》使用 6 GB 以上显存。请将分辨率缩放保持为 100%（720p/1080p）以避免卡顿。",
         "Recommended - keep this on. Fixes 1-5 fps on the car delivery and part install screens and Garage car-image softlocks. Unticking it does not stop cars flickering on tracks like London. May crackle audio in bumper cam.": "推荐 - 请保持开启。修复交车画面和零件安装画面仅 1-5 FPS 的问题，以及车库车辆图片更新时卡死的问题。取消勾选并不能解决伦敦等赛道上车辆闪烁的问题。在保险杠视角下可能会出现音频爆音。",
+        # Keyboard key table (#48)
+        "Keyboard keys": "键盘按键",
+        "Player 1 is set to Keyboard.": "玩家 1 当前使用键盘。",
+        "Player 1 is a gamepad now. These keys work when Player 1 is set to Keyboard (or Automatic finds no gamepad).": "玩家 1 当前使用手柄。将玩家 1 设为“键盘”（或“自动”未检测到手柄）时，这些按键才会生效。",
+        "Key": "按键",
+        "PS3 button": "PS3 按键",
+        "In GT6": "游戏内功能",
+        "Letter keys need a Latin keyboard layout (e.g. English). With a Cyrillic or Greek layout active, switch to English while playing.": "字母键需要使用拉丁键盘布局（例如英语）。如果当前为西里尔或希腊语布局，游戏时请切换为英语。",
+        "Confirm / accelerate": "确认 / 加速",
+        "Back": "返回",
+        "Pause / start race": "暂停 / 开始比赛",
+        "Steer left": "向左转向",
+        "Steer right": "向右转向",
+        "Menu up": "菜单上移",
+        "Menu down": "菜单下移",
+        "Menu left": "菜单左移",
+        "Menu right": "菜单右移",
     }
 }
 

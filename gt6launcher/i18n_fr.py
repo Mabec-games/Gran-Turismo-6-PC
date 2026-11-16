@@ -491,4 +491,34 @@ STRINGS: dict[str, str] = {
         "GPU avec peu de VRAM détecté ({gb} Go). 6 Go de VRAM ou plus sont recommandés pour GT6. Les résolutions élevées (1080p+ / 1440p) peuvent saccader ou manquer de mémoire.",
     "Low VRAM GPU detected (< 6 GB). 6+ GB VRAM is recommended for GT6. Keep resolution scale at 100% (720p/1080p) to avoid stuttering.":
         "GPU avec peu de VRAM détecté (< 6 Go). 6 Go de VRAM ou plus sont recommandés pour GT6. Gardez l'échelle de résolution à 100 % (720p/1080p) pour éviter les saccades.",
+    "Keyboard keys":
+        "Touches du clavier",
+    "Player 1 is set to Keyboard.":
+        "Le joueur 1 utilise le clavier.",
+    "Player 1 is a gamepad now. These keys work when Player 1 is set to Keyboard (or Automatic finds no gamepad).":
+        "Le joueur 1 utilise actuellement une manette. Ces touches fonctionnent quand le joueur 1 est réglé sur Clavier (ou quand Automatique ne trouve aucune manette).",
+    "Key":
+        "Touche",
+    "PS3 button":
+        "Bouton PS3",
+    "In GT6":
+        "Dans GT6",
+    "Letter keys need a Latin keyboard layout (e.g. English). With a Cyrillic or Greek layout active, switch to English while playing.":
+        "Les touches de lettres nécessitent une disposition de clavier latine (par ex. anglais). Avec une disposition cyrillique ou grecque, passez en anglais pendant le jeu.",
+    "Confirm / accelerate":
+        "Valider / accélérer",
+    "Pause / start race":
+        "Pause / départ de la course",
+    "Steer left":
+        "Tourner à gauche",
+    "Steer right":
+        "Tourner à droite",
+    "Menu up":
+        "Menu haut",
+    "Menu down":
+        "Menu bas",
+    "Menu left":
+        "Menu gauche",
+    "Menu right":
+        "Menu droite",
 }

@@ -538,6 +538,9 @@ class MainWindow(QMainWindow):
         b = QPushButton("Refresh")
         b.clicked.connect(lambda: (self._fill_pads(), self._update_wheel_label()))
         h.addWidget(b)
+        b = QPushButton("Keyboard keys")
+        b.clicked.connect(self.show_keyboard_keys)
+        h.addWidget(b)
         f.addLayout(h)
         self.pad_lbl = label("", 9, name="muted")
         f.addWidget(self.pad_lbl)
@@ -624,6 +627,25 @@ class MainWindow(QMainWindow):
                                  if paths.IS_WINDOWS else tr("No gamepad connected."))
         else:
             self.pad_lbl.setText(f"{tr('Connected:')} {', '.join(pads)}" if pads else tr("No gamepad connected."))
+
+    def show_keyboard_keys(self) -> None:
+        """Read-only table of the keyboard keys (#48); does not change any controller setting."""
+        from html import escape
+        from . import gamepad
+        active, rows = gamepad.keyboard_key_table()
+        body = "".join(f"<tr><td><b>{escape(key)}</b></td><td>{escape(tr(button))}</td><td>{escape(tr(action))}</td></tr>"
+                       for button, key, action in rows)
+        status = tr("Player 1 is set to Keyboard.") if active else \
+            tr("Player 1 is a gamepad now. These keys work when Player 1 is set to Keyboard (or Automatic finds no gamepad).")
+        box = QMessageBox(self)
+        box.setWindowTitle(tr("Keyboard keys"))
+        box.setTextFormat(Qt.TextFormat.RichText)
+        box.setText(f"<p>{escape(status)}</p>"
+                    f"<table cellspacing='0' cellpadding='3'><tr><th align='left'>{escape(tr('Key'))}</th>"
+                    f"<th align='left'>{escape(tr('PS3 button'))}</th><th align='left'>{escape(tr('In GT6'))}</th></tr>"
+                    f"{body}</table>"
+                    f"<p>{escape(tr('Letter keys need a Latin keyboard layout (e.g. English). With a Cyrillic or Greek layout active, switch to English while playing.'))}</p>")
+        box.exec()
 
     def _on_pad_changed(self, _i) -> None:
         if self._loading:

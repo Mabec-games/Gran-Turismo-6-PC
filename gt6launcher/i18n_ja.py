@@ -491,4 +491,34 @@ STRINGS: dict[str, str] = {
         "VRAM の少ない GPU を検出しました（{gb} GB）。GT6 には VRAM 6 GB 以上を推奨します。高解像度（1080p 以上 / 1440p）ではカクつきやメモリ不足が起こる場合があります。",
     "Low VRAM GPU detected (< 6 GB). 6+ GB VRAM is recommended for GT6. Keep resolution scale at 100% (720p/1080p) to avoid stuttering.":
         "VRAM の少ない GPU を検出しました（6 GB 未満）。GT6 には VRAM 6 GB 以上を推奨します。カクつきを避けるため、解像度スケールは 100%（720p/1080p）のままにしてください。",
+    "Keyboard keys":
+        "キーボードのキー",
+    "Player 1 is set to Keyboard.":
+        "プレイヤー 1 はキーボードに設定されています。",
+    "Player 1 is a gamepad now. These keys work when Player 1 is set to Keyboard (or Automatic finds no gamepad).":
+        "現在プレイヤー 1 はゲームパッドです。これらのキーは、プレイヤー 1 をキーボードに設定したとき（または自動でゲームパッドが見つからないとき）に使えます。",
+    "Key":
+        "キー",
+    "PS3 button":
+        "PS3 ボタン",
+    "In GT6":
+        "GT6 での操作",
+    "Letter keys need a Latin keyboard layout (e.g. English). With a Cyrillic or Greek layout active, switch to English while playing.":
+        "文字キーにはラテン文字のキーボード配列（英語など）が必要です。キリル文字やギリシャ文字の配列を使っている場合は、プレイ中は英語に切り替えてください。",
+    "Confirm / accelerate":
+        "決定 / アクセル",
+    "Pause / start race":
+        "ポーズ / レース開始",
+    "Steer left":
+        "左にステア",
+    "Steer right":
+        "右にステア",
+    "Menu up":
+        "メニュー上",
+    "Menu down":
+        "メニュー下",
+    "Menu left":
+        "メニュー左",
+    "Menu right":
+        "メニュー右",
 }
