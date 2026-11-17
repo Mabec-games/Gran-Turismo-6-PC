@@ -359,12 +359,38 @@ def _sdl_gamepads() -> Optional[list[str]]:
             except Exception:
                 pass
 
+        # Name each pad the way RPCS3 does (sdl_pad_handler.cpp: SDL_OpenGamepad + SDL_GetGamepadName).
+        # SDL_GetGamepadNameForID is NOT equivalent: under Steam (SteamOS Game Mode, or any game
+        # launched through Steam) the pad is Steam's virtual gamepad, and only an *opened* gamepad
+        # takes the real controller's name from Steam's SteamVirtualGamepadInfo file. By ID it is
+        # "Steam Virtual Gamepad", but RPCS3 sees "Steam Deck" - Player 1 then matched no device (#54).
+        can_open = all(hasattr(sdl, fn) for fn in ("SDL_OpenGamepad", "SDL_GetGamepadName", "SDL_CloseGamepad"))
+        if can_open:
+            sdl.SDL_OpenGamepad.argtypes = [ctypes.c_uint32]
+            sdl.SDL_OpenGamepad.restype = ctypes.c_void_p
+            sdl.SDL_GetGamepadName.argtypes = [ctypes.c_void_p]
+            sdl.SDL_GetGamepadName.restype = ctypes.c_char_p
+            sdl.SDL_CloseGamepad.argtypes = [ctypes.c_void_p]
+            sdl.SDL_CloseGamepad.restype = None
+
+        def pad_name(jid: int) -> Optional[bytes]:
+            if can_open:
+                pad = sdl.SDL_OpenGamepad(jid)
+                if pad:
+                    try:
+                        raw = sdl.SDL_GetGamepadName(pad)
+                        if raw:
+                            return raw
+                    finally:
+                        sdl.SDL_CloseGamepad(pad)
+            return sdl.SDL_GetGamepadNameForID(jid)
+
         count = ctypes.c_int(0)
         ids = sdl.SDL_GetGamepads(ctypes.byref(count))
         seen: dict[str, int] = {}
         out = []
         for i in range(count.value):
-            raw = sdl.SDL_GetGamepadNameForID(ids[i])
+            raw = pad_name(ids[i])
             name = raw.decode("utf-8", "replace") if raw else "Gamepad"
             seen[name] = seen.get(name, 0) + 1
             out.append(f"{name} {seen[name]}")
@@ -457,7 +483,22 @@ def _sdl2_gamepads() -> Optional[list[str]]:
         for i in range(count):
             if not sdl.SDL_IsGameController(i):
                 continue
-            raw = sdl.SDL_GameControllerNameForIndex(i) or sdl.SDL_JoystickNameForIndex(i)
+            raw = None
+            # Opened controller name, as in the SDL3 path (Steam virtual gamepad -> real controller name)
+            if all(hasattr(sdl, fn) for fn in ("SDL_GameControllerOpen", "SDL_GameControllerName", "SDL_GameControllerClose")):
+                sdl.SDL_GameControllerOpen.argtypes = [ctypes.c_int]
+                sdl.SDL_GameControllerOpen.restype = ctypes.c_void_p
+                sdl.SDL_GameControllerName.argtypes = [ctypes.c_void_p]
+                sdl.SDL_GameControllerName.restype = ctypes.c_char_p
+                sdl.SDL_GameControllerClose.argtypes = [ctypes.c_void_p]
+                sdl.SDL_GameControllerClose.restype = None
+                gc = sdl.SDL_GameControllerOpen(i)
+                if gc:
+                    try:
+                        raw = sdl.SDL_GameControllerName(gc)
+                    finally:
+                        sdl.SDL_GameControllerClose(gc)
+            raw = raw or sdl.SDL_GameControllerNameForIndex(i) or sdl.SDL_JoystickNameForIndex(i)
             name = raw.decode("utf-8", "replace") if raw else "Gamepad"
             seen[name] = seen.get(name, 0) + 1
             out.append(f"{name} {seen[name]}")
@@ -537,6 +578,9 @@ def configure(mode: str, device: str = "", log=print) -> str:
             return f"Player 1: {p1.get('Device', 'gamepad')} (no gamepad detected - kept existing)"
         else:
             mode = "keyboard"
+    elif mode == "pad" and pads and device not in pads and device.lower().startswith("steam virtual gamepad"):
+        # Saved by launchers <= 1.2-beta4, which named Steam's virtual pad differently from RPCS3 (#54)
+        device = pads[0]
     if mode == "pad" and device:
         new = {"Handler": "XInput" if device.startswith(XINPUT_PREFIX) else "SDL", "Device": device}
     else:
