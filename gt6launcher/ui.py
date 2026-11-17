@@ -2037,9 +2037,13 @@ class MainWindow(QMainWindow):
             self.proc = None
             self.refresh()
             entry = self._proc_entry
-            if proc.returncode == 0 and ran_for < QUICK_EXIT_SECONDS and entry \
-                    and mods.installed_stack(entry.title_id):
-                QTimer.singleShot(0, lambda: self._offer_mod_uninstall(entry, ran_for))
+            if proc.returncode == 0 and entry and mods.installed_stack(entry.title_id):
+                # Time the game itself ran, not RPCS3's start-up/compile time (#53: 74 s total, 4 s of game)
+                game_ran = diagnostics.game_run_seconds()
+                quick = game_ran if game_ran is not None and game_ran < QUICK_EXIT_SECONDS else (
+                    ran_for if ran_for < QUICK_EXIT_SECONDS else None)
+                if quick is not None:
+                    QTimer.singleShot(0, lambda: self._offer_mod_uninstall(entry, quick))
 
     def _offer_mod_uninstall(self, entry, ran_for: float) -> None:
         """The game closed by itself within seconds while mods are installed (issue #49): on some PCs the

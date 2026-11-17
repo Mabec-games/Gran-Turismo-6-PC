@@ -50,6 +50,35 @@ def _copy_rpcs3_log(destination: str, source: Optional[str] = None) -> bool:
         return False
 
 
+_LOG_TIME = re.compile(rb"^\S+ (\d+):(\d\d):(\d\d(?:\.\d+)?) ")
+
+
+def game_run_seconds(source: Optional[str] = None) -> Optional[float]:
+    """How long the game's own code ran before it quit by itself: from the first PPU main_thread
+    line to `_sys_process_exit` in RPCS3.log. None if the game did not exit on its own (closed
+    window, crash) or the log is unreadable.
+
+    The launcher's wall-clock time is not enough: RPCS3 can spend a minute or more compiling PPU/SPU
+    code before the game starts, so a mod that makes GT6 quit 4 s after boot looked like a 74 s run (#53)."""
+    def seconds(line: bytes) -> Optional[float]:
+        m = _LOG_TIME.match(line.lstrip(b"\xef\xbb\xbf"))
+        return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3)) if m else None
+
+    start = end = None
+    try:
+        with open(source or paths.rpcs3_log_file(), "rb") as f:
+            for line in f:
+                if start is None and b"Thread (main_thread)" in line:
+                    start = seconds(line)
+                elif b"sys_process: _sys_process_exit(" in line:
+                    end = seconds(line)
+    except OSError:
+        return None
+    if start is None or end is None or end < start:
+        return None
+    return end - start
+
+
 def _last_session_dir() -> str:
     return os.path.join(paths.logs_dir(), "last-session")
 
