@@ -132,6 +132,24 @@ def identify_folder(folder: str | os.PathLike) -> GameImage:
                      str(sfo.get("APP_VER", "")))
 
 
+DISC_EBOOT = "PS3_GAME/USRDIR/EBOOT.BIN"
+_EXEC_MAGICS = (b"SCE\0", b"\x7fELF")  # signed SELF (retail disc) or plain ELF
+
+
+def disc_executable_ok(path: str | os.PathLike) -> bool:
+    """False when the disc's EBOOT.BIN is not a SELF/ELF - the sign of a dump that is
+    still disc-encrypted (e.g. a Redump ISO used without its .dkey). PARAM.SFO lives in
+    the unencrypted part of the disc, so such a dump identifies fine but RPCS3 then fails
+    with "Invalid or unsupported file format ... Not an ELF".
+    Raises FileNotFoundError when EBOOT.BIN is missing (incomplete dump)."""
+    if os.path.isdir(path):
+        with open(os.path.join(path, *DISC_EBOOT.split("/")), "rb") as f:
+            head = f.read(4)
+    else:
+        head = iso_read_file(path, DISC_EBOOT, 4)
+    return head in _EXEC_MAGICS
+
+
 # --------------------------------------------------------------------------- PKG
 
 

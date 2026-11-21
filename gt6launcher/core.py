@@ -15,7 +15,7 @@ from .i18n import tr
 
 from . import lan, mods, patches, paths
 from . import profile as profile_mod
-from .formats import GameImage, identify_folder, identify_iso
+from .formats import GameImage, disc_executable_ok, identify_folder, identify_iso
 from .profile import Settings, build_custom_config, desired_patches
 from .rpcs3 import RPCS3, find_rpcs3, installed_version, seed_gui_settings
 from .updates import DEFAULT_TARGET, install_chain, Downloader
@@ -31,6 +31,23 @@ FIRMWARE_LIST_URL = "http://fus01.ps3.update.playstation.net/update/ps3/list/us/
 
 LogFn = Callable[[str], None]
 ProgressFn = Callable[[str, int, int], None]
+
+
+def disc_problem(path: str) -> Optional[str]:
+    """User-facing reason why this disc image/folder cannot boot, or None if it looks fine."""
+    name = os.path.basename(path.rstrip("/\\"))
+    try:
+        if disc_executable_ok(path):
+            return None
+    except FileNotFoundError:
+        return (f"{name} has no PS3_GAME/USRDIR/EBOOT.BIN. The dump is incomplete - "
+                f"extract or download the game again.")
+    except OSError as e:
+        return f"{name} could not be read: {e}"
+    return (f"{name} is an encrypted disc dump, so RPCS3 cannot start it (\"Booting failed\").\n\n"
+            f"Redump-style ISOs must be decrypted with their disc key (.dkey), for example with "
+            f"PS3Dec, before they can be used. Extracting the ISO with 7-Zip does not decrypt it. "
+            f"Use a decrypted ISO, or dump your own disc, then add it again.")
 
 
 @dataclass
@@ -155,6 +172,9 @@ class Core:
         if img.title_id not in GT6_TITLES:
             raise RuntimeError(f"{os.path.basename(path)} is {img.title_id} ({img.title}), not a supported "
                                f"Gran Turismo 6 disc.")
+        problem = disc_problem(path)
+        if problem:
+            raise RuntimeError(problem)
         self.data.setdefault("games", {})[img.title_id] = {"path": path, "title": img.title,
                                                           "disc_version": img.disc_version}
         self.data.setdefault("active", img.title_id)
@@ -182,7 +202,10 @@ class Core:
                     except Exception:
                         continue
                     if img.title_id in GT6_TITLES and img.title_id not in self.data.get("games", {}):
-                        found.append(self.add_game(f))
+                        try:
+                            found.append(self.add_game(f))
+                        except RuntimeError as e:
+                            self.log(f"skipped {f}: {e}")
         return found
 
     # ------------------------------------------------------------------ firmware
@@ -337,6 +360,9 @@ class Core:
         if not self.vulkan_available():
             raise RuntimeError("Vulkan was not found on this PC. Install or update your graphics driver "
                                "(NVIDIA, AMD or Intel) - it includes Vulkan - then start again.")
+        problem = disc_problem(entry.image.path)
+        if problem:
+            raise RuntimeError(problem)
         rp = self.rpcs3()
         self.prepare(entry)
         try:
