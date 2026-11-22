@@ -263,6 +263,26 @@ def build_system_info_text(settings=None, entry=None) -> str:
     return "\n".join(lines) + "\n"
 
 
+_CONFIG_MAX_BYTES = 512 * 1024
+
+
+def _config_files() -> list[tuple[str, str]]:
+    """(source path, name in zip) of the RPCS3 settings that matter for input/render reports.
+    rpcn.yml is never included: it holds the user's RPCN password."""
+    base = paths.rpcs3_settings_dir()
+    out = []
+    for rel in ("LogitechG27.yml", "patch_config.yml", "config.yml"):
+        out.append((os.path.join(base, rel), rel))
+    for sub in ("input_configs", "custom_configs"):
+        root = os.path.join(base, sub)
+        for dirpath, _dirs, files in os.walk(root):
+            for fn in sorted(files):
+                if fn.lower().endswith(".yml"):
+                    src = os.path.join(dirpath, fn)
+                    out.append((src, os.path.relpath(src, base).replace(os.sep, "/")))
+    return out
+
+
 def save_logs_archive(dest_zip: str, launcher_text: str, settings=None, entry=None) -> tuple[str, bool]:
     """Bundle current session logs, hardware specs, and recent crash reports into a .zip file."""
     if not dest_zip.lower().endswith(".zip"):
@@ -300,6 +320,12 @@ def save_logs_archive(dest_zip: str, launcher_text: str, settings=None, entry=No
         if os.path.isfile(origin_log):
             try:
                 zf.write(origin_log, "rpcs3-launch-origin.log")
+            except OSError:
+                pass
+        for src, name in _config_files():
+            try:
+                if os.path.isfile(src) and os.path.getsize(src) <= _CONFIG_MAX_BYTES:
+                    zf.write(src, f"config/{name}")
             except OSError:
                 pass
         crashes_dir = os.path.join(paths.logs_dir(), "crashes")
