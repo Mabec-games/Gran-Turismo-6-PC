@@ -960,6 +960,11 @@ class MainWindow(QMainWindow):
         f.addLayout(h)
         f.addWidget(label("Every file a mod overwrites is backed up, so uninstalling restores the game exactly. "
                           "Start a new save when you first use the Career mod.", 9, name="muted"))
+        # #63: the mod's sunset lighting renders with green light glow in RPCS3 - say so up front.
+        f.addWidget(label("Known issue: the Career mod gives some tracks sunset lighting (for example Clubman Stage "
+                          "Route 5). In RPCS3 this can make car lights glow green and the picture look washed out. "
+                          "This comes from the mod, not from your settings - changing graphics options does not fix it.",
+                          9, name="warn"))
         f.addWidget(label("Experimental: these mods do not work on every PC. If the game closes by itself right "
                           "after starting, click 'Uninstall all mods' - the launcher also offers this automatically.",
                           9, name="muted"))

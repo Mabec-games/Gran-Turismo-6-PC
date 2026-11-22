@@ -471,6 +471,8 @@ STRINGS: dict[str, str] = {
         "Garder les mods",
     "Experimental: these mods do not work on every PC. If the game closes by itself right after starting, click 'Uninstall all mods' - the launcher also offers this automatically.":
         "Expérimental : ces mods ne fonctionnent pas sur tous les PC. Si le jeu se ferme tout seul juste après le démarrage, cliquez sur 'Désinstaller tous les mods' - le launcher le propose aussi automatiquement.",
+    'Known issue: the Career mod gives some tracks sunset lighting (for example Clubman Stage Route 5). In RPCS3 this can make car lights glow green and the picture look washed out. This comes from the mod, not from your settings - changing graphics options does not fix it.':
+        "Problème connu : le mod Career donne un éclairage de coucher de soleil à certains circuits (par exemple Clubman Stage Route 5). Dans RPCS3, les feux des voitures peuvent alors briller en vert et l'image paraître délavée. Cela vient du mod, pas de vos réglages - modifier les options graphiques ne corrige pas le problème.",
     "Current internal target: approximately {w}x{h} ({scale}%).":
         "Cible de rendu interne actuelle : environ {w}x{h} ({scale} %).",
     "Current resolution scale: {scale}%.":

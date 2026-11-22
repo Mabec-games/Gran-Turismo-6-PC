@@ -471,6 +471,8 @@ STRINGS: dict[str, str] = {
         "MOD を残す",
     "Experimental: these mods do not work on every PC. If the game closes by itself right after starting, click 'Uninstall all mods' - the launcher also offers this automatically.":
         "実験的機能：これらの MOD はすべての PC で動作するわけではありません。起動直後にゲームが自動で終了する場合は「すべての MOD をアンインストール」をクリックしてください。ランチャーも自動で提案します。",
+    'Known issue: the Career mod gives some tracks sunset lighting (for example Clubman Stage Route 5). In RPCS3 this can make car lights glow green and the picture look washed out. This comes from the mod, not from your settings - changing graphics options does not fix it.':
+        '既知の問題：Career MOD は一部のコース（例：Clubman Stage Route 5）に夕暮れのライティングを追加します。RPCS3 ではこれにより車のライトが緑色に光り、画面が白っぽく見えることがあります。原因は MOD であり、設定ではありません。グラフィック設定を変更しても直りません。',
     "Current internal target: approximately {w}x{h} ({scale}%).":
         "現在の内部レンダリング解像度：約 {w}x{h}（{scale}%）。",
     "Current resolution scale: {scale}%.":

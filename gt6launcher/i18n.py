@@ -330,6 +330,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "Uninstall mods": "卸载模组",
         "Keep mods": "保留模组",
         "Experimental: these mods do not work on every PC. If the game closes by itself right after starting, click 'Uninstall all mods' - the launcher also offers this automatically.": "实验性功能：这些模组并非在所有电脑上都能正常运行。如果游戏启动后立即自行关闭，请点击“卸载全部模组”——启动器也会自动提示此操作。",
+        'Known issue: the Career mod gives some tracks sunset lighting (for example Clubman Stage Route 5). In RPCS3 this can make car lights glow green and the picture look washed out. This comes from the mod, not from your settings - changing graphics options does not fix it.': '已知问题：Career 模组为部分赛道加入了日落光照（例如 Clubman Stage Route 5）。在 RPCS3 中，这可能导致车灯发出绿色光晕、画面发白。这是模组造成的，并非你的设置问题——更改图形选项无法解决。',
         # Hardware advisory popup
         "Current internal target: approximately {w}x{h} ({scale}%).": "当前内部渲染目标：约 {w}x{h} ({scale}%)。",
         "Current resolution scale: {scale}%.": "当前分辨率缩放：{scale}%。",
