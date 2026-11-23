@@ -2125,12 +2125,12 @@ class WheelWizard(QDialog):
         ("clutch", "Press the CLUTCH pedal (Skip if you have none).", "axis", True),
         ("shift_up", "Pull the RIGHT paddle / shift-up button.", "button", True),
         ("shift_down", "Pull the LEFT paddle / shift-down button.", "button", True),
-        ("cross", "Press the button you want as  X  (confirm / OK).", "button", False),
-        ("circle", "Press the button you want as  O  (back).", "button", False),
-        ("square", "Press the button you want as  [ ]  (Square).", "button", True),
-        ("triangle", "Press the button you want as  /\\  (Triangle).", "button", True),
-        ("pause", "Press the button you want as START (pause menu).", "button", False),
-        ("select", "Press the button you want as SELECT (change view).", "button", True),
+        ("cross", "Press the button you want as  X  (confirm / OK) - A on Xbox-style wheels.", "button", False),
+        ("circle", "Press the button you want as  O  (back) - B on Xbox-style wheels.", "button", False),
+        ("square", "Press the button you want as  [ ]  (Square) - X on Xbox-style wheels.", "button", True),
+        ("triangle", "Press the button you want as  /\\  (Triangle) - Y on Xbox-style wheels.", "button", True),
+        ("pause", "Press the button you want as START (pause menu) - Menu on Xbox-style wheels.", "button", False),
+        ("select", "Press the button you want as SELECT (change view) - View on Xbox-style wheels.", "button", True),
         ("up", "Press D-pad UP.", "any", True),
         ("down", "Press D-pad DOWN.", "any", True),
         ("left", "Press D-pad LEFT.", "any", True),
@@ -2286,7 +2286,12 @@ class WheelWizard(QDialog):
                 w.deleteLater()
 
         self.review_bars.clear()
+        corrected = self._correct_pedal_polarity()
         self.review_layout.addWidget(label(tr("Controls Review & Test"), 13, True))
+        if corrected:
+            self.review_layout.addWidget(label(
+                tr("Pedal direction set from the released position: {pedals}").format(
+                    pedals=", ".join(tr(k.capitalize()) for k in corrected)), 9, name="warn"))
         self.review_layout.addWidget(label(
             tr("Test your steering and pedals below. If any pedal is pressed when released, check 'Invert'."),
             9, name="muted"
@@ -2322,6 +2327,41 @@ class WheelWizard(QDialog):
         self.review_btn_lbl = label(tr("Buttons: press any mapped button to test"), 9, name="muted")
         self.review_layout.addWidget(self.review_btn_lbl)
         self.review_container.setVisible(True)
+
+    def _correct_pedal_polarity(self) -> list[str]:
+        """Set each pedal's direction from where it rests now. On the review page nobody is pressing
+        the pedals, so this is their real released position. The capture step compares the value
+        before and after the press, and gets it backwards when the baseline was wrong: Logitech
+        wheels on Windows (G29/G920/G923) send no pedal value until something moves, and if that
+        first report already has the pedal pushed down, the pushed position becomes the 'rest'
+        (#50, #61). Then the pedal reads as pressed when released.
+        RPCS3's G27 emulation wants a released pedal at the axis maximum, so a pedal resting at the
+        minimum needs reverse. Axes that rest mid-range (combined pedals) or have not reported
+        are left as captured. Returns the pedals that were changed."""
+        try:
+            now = self.js.state()
+        except Exception:  # noqa: BLE001 - never break the wizard over a read
+            return []
+        changed = []
+        for key in ("throttle", "brake", "clutch"):
+            m = self.mapping.get(key)
+            if not m or m.get("type") != "axis":
+                continue
+            di = next((i for i, d in enumerate(self.js.devices) if d["type_id"] == m["device_type_id"]), None)
+            if di is None or di >= len(now):
+                continue
+            axes, reported = now[di].get("axes", []), now[di].get("reported")
+            idx = m["id"]
+            if idx >= len(axes) or (reported is not None and (idx >= len(reported) or not reported[idx])):
+                continue
+            val = axes[idx]
+            if abs(val) < 0x7FFF * 0.9:
+                continue
+            rev = val < 0
+            if bool(m.get("reverse", False)) != rev:
+                m["reverse"] = rev
+                changed.append(key)
+        return changed
 
     def _set_mapping_reverse(self, key: str, rev: bool) -> None:
         if key in self.mapping:
