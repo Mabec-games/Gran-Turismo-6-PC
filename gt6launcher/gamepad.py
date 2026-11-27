@@ -93,6 +93,7 @@ def _load_sdl2() -> Optional[ctypes.CDLL]:
 
 
 XINPUT_PREFIX = "XInput Pad #"   # RPCS3 xinput_pad_handler device names: "XInput Pad #1".."#4"
+XINPUT_DEVSUBTYPE_WHEEL = 0x02
 
 
 def _xinput_pads() -> list[str]:
@@ -114,11 +115,29 @@ def _xinput_pads() -> list[str]:
         return []
     get.argtypes = [ctypes.c_uint32, ctypes.POINTER(_State)]
     get.restype = ctypes.c_uint32
+
+    # XINPUT_CAPABILITIES: Type, SubType, Flags, XINPUT_GAMEPAD (12 bytes), XINPUT_VIBRATION (4 bytes)
+    class _Caps(ctypes.Structure):
+        _fields_ = [("type", ctypes.c_uint8), ("subtype", ctypes.c_uint8), ("flags", ctypes.c_uint16),
+                    ("gamepad", ctypes.c_uint8 * 12), ("vibration", ctypes.c_uint8 * 4)]
+    try:
+        caps_fn = getattr(ctypes.windll, dll).XInputGetCapabilities
+        caps_fn.argtypes = [ctypes.c_uint32, ctypes.c_uint32, ctypes.POINTER(_Caps)]
+        caps_fn.restype = ctypes.c_uint32
+    except (OSError, AttributeError):
+        caps_fn = None
     out = []
     for i in range(4):
         st = _State()
-        if get(i, ctypes.byref(st)) == 0:  # ERROR_SUCCESS
-            out.append(f"{XINPUT_PREFIX}{i + 1}")
+        if get(i, ctypes.byref(st)) != 0:  # not ERROR_SUCCESS: slot empty
+            continue
+        # Xbox-style wheels (Logitech G920/G923 Xbox edition) are XInput devices too. They report
+        # SubType WHEEL and must not become Player 1's pad: they drive the emulated G27 instead.
+        if caps_fn is not None:
+            caps = _Caps()
+            if caps_fn(i, 0, ctypes.byref(caps)) == 0 and caps.subtype == XINPUT_DEVSUBTYPE_WHEEL:
+                continue
+        out.append(f"{XINPUT_PREFIX}{i + 1}")
     return out
 
 
@@ -182,7 +201,7 @@ HANDHELD_CONTROLLER_NAMES = (
 )
 WHEEL_NAME_HINTS = ("wheel", "rs50", "g pro", "pro racing", "logitech rs",
                     "g923", "g29", "g920", "g27", "g25", "thrustmaster", "fanatec", "moza",
-                    "simucube", "cammus", "logitech driving force", "pedal", "shifter")
+                    "simucube", "cammus", "driving force", "momo", "formula force", "pedal", "shifter")
 
 
 def is_handheld_controller(name: str) -> bool:
@@ -385,6 +404,11 @@ def _sdl_gamepads() -> Optional[list[str]]:
                         sdl.SDL_CloseGamepad(pad)
             return sdl.SDL_GetGamepadNameForID(jid)
 
+        type_for_id = getattr(sdl, "SDL_GetJoystickTypeForID", None)
+        if type_for_id is not None:
+            type_for_id.argtypes = [ctypes.c_uint32]
+            type_for_id.restype = ctypes.c_int
+
         count = ctypes.c_int(0)
         ids = sdl.SDL_GetGamepads(ctypes.byref(count))
         seen: dict[str, int] = {}
@@ -392,7 +416,11 @@ def _sdl_gamepads() -> Optional[list[str]]:
         for i in range(count.value):
             raw = pad_name(ids[i])
             name = raw.decode("utf-8", "replace") if raw else "Gamepad"
-            seen[name] = seen.get(name, 0) + 1
+            seen[name] = seen.get(name, 0) + 1  # counted even when skipped: RPCS3 numbers every pad
+            # A wheel with a gamepad mapping (SDL's own wheel list, e.g. Logitech MOMO / Formula Force)
+            # is not a pad for Player 1; list_gamepads() also drops wheels by name.
+            if type_for_id is not None and type_for_id(ids[i]) == SDL_JOYSTICK_TYPE_WHEEL:
+                continue
             out.append(f"{name} {seen[name]}")
         if ids:
             sdl.SDL_free(ids)
@@ -477,6 +505,11 @@ def _sdl2_gamepads() -> Optional[list[str]]:
             except Exception:
                 pass
 
+        dev_type = getattr(sdl, "SDL_JoystickGetDeviceType", None)
+        if dev_type is not None:
+            dev_type.argtypes = [ctypes.c_int]
+            dev_type.restype = ctypes.c_int
+
         count = sdl.SDL_NumJoysticks()
         seen: dict[str, int] = {}
         out = []
@@ -500,7 +533,9 @@ def _sdl2_gamepads() -> Optional[list[str]]:
                         sdl.SDL_GameControllerClose(gc)
             raw = raw or sdl.SDL_GameControllerNameForIndex(i) or sdl.SDL_JoystickNameForIndex(i)
             name = raw.decode("utf-8", "replace") if raw else "Gamepad"
-            seen[name] = seen.get(name, 0) + 1
+            seen[name] = seen.get(name, 0) + 1  # counted even when skipped: RPCS3 numbers every pad
+            if dev_type is not None and dev_type(i) == SDL_JOYSTICK_TYPE_WHEEL:
+                continue
             out.append(f"{name} {seen[name]}")
         return out
     finally:
