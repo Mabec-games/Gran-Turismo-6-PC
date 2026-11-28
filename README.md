@@ -190,7 +190,7 @@ The GT6-patched emulator is built with `emulator/scripts/build_rpcs3.sh` (see [e
 ## License
 
 The launcher is licensed under **GPL-3.0** ([LICENSE](LICENSE)). The bundled emulator is RPCS3
-(GPL-2.0), built from upstream commit `eee3f0f7c` plus the patches in [emulator/gt6-patches](emulator/gt6-patches).
+(GPL-2.0), built from upstream commit `0ca5eb0ef` plus the patches in [emulator/gt6-patches](emulator/gt6-patches).
 Third-party patches and mods belong to their authors and are downloaded from their official sources.
 
 *Gran Turismo* is a trademark of Sony Interactive Entertainment. This is an unofficial fan project, not

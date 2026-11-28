@@ -37,7 +37,7 @@ $EmuDir = Join-Path $Work "rpcs3"
 if ($env:GT6L_BUNDLE_RPCS3_DIR) {
     Copy-Item -Recurse $env:GT6L_BUNDLE_RPCS3_DIR $EmuDir
 } else {
-    # same pinned build as rpcs3.py WINDOWS_PINNED (keep in sync)
+    # fallback: stock build, same as rpcs3.py WINDOWS_PINNED (keep in sync; stock 20663+ crashes GT6, see patch 10)
     $RpUrl = "https://github.com/RPCS3/rpcs3-binaries-win/releases/download/build-eee3f0f7c285f2b8aa18fec278a2146c5cd874eb/rpcs3-v0.0.43-20565-eee3f0f7_win64_msvc.7z"
     $RpSha = "FDEC321625C856DCF2D84EDA128F75F24A428230A233F1B2BF12C490882870E7"
     $Rp7z = Join-Path $Work "rpcs3.7z"

@@ -1,0 +1,21 @@
+diff --git a/rpcs3/Emu/RSX/Program/FragmentProgramDecompiler.cpp b/rpcs3/Emu/RSX/Program/FragmentProgramDecompiler.cpp
+index 37465320f..449b1b21b 100644
+--- a/rpcs3/Emu/RSX/Program/FragmentProgramDecompiler.cpp
++++ b/rpcs3/Emu/RSX/Program/FragmentProgramDecompiler.cpp
+@@ -1228,7 +1228,15 @@ bool FragmentProgramDecompiler::handle_sct_scb(u32 opcode)
+ 		SetDst("_builtin_lif($0)");
+ 		properties.has_lit_op = true;
+ 		return true;
+-	case RSX_FP_OPCODE_LRP: SetDst("_builtin_lerp($2, $1, $0)", OPFLAGS::skip_type_cast); return true;
++	case RSX_FP_OPCODE_LRP:
++	{
++		// Only skip the native-half cast when every source already is a half register.
++		// LRP H0, R4, R10, R2 (GT6) otherwise emits 'f16vec4 = vec4' and the shader fails to compile.
++		const auto is_half_temp = [](const auto& s) { return s.reg_type == RSX_FP_REGISTER_TYPE_TEMP && s.fp16; };
++		const bool all_half = is_half_temp(src0) && is_half_temp(src1) && is_half_temp(src2);
++		SetDst("_builtin_lerp($2, $1, $0)", all_half ? OPFLAGS::skip_type_cast : 0u);
++		return true;
++	}
+ 	case RSX_FP_OPCODE_LG2: SetDst("_builtin_log2($0.x).xxxx"); return true;
+ 	// Pack operations. See https://www.khronos.org/registry/OpenGL/extensions/NV/NV_fragment_program.txt
+ 	// PK2 = PK2H (2 16-bit floats)

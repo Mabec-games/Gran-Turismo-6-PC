@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 env:
-  RPCS3_COMMIT: eee3f0f7c285f2b8aa18fec278a2146c5cd874eb   # 0.0.43-20565
+  RPCS3_COMMIT: 0ca5eb0efe50ec4e8aa07892ab86d57842246eb4   # 0.0.43-20663
 
 jobs:
   rpcs3:
@@ -81,14 +81,14 @@ jobs:
         working-directory: rpcs3
         run: |
           mkdir -p "$CCACHE_DIR" "$BUILD_ARTIFACTSTAGINGDIRECTORY"
-          docker pull --quiet rpcs3/rpcs3-ci-jammy:2.2
+          docker pull --quiet rpcs3/rpcs3-ci-jammy:2.3
           docker run --rm \
             -w / \
             -v "$PWD:/rpcs3" \
             --env-file .ci/docker.env \
             -v "$CCACHE_DIR:/root/.ccache" \
             -v "$BUILD_ARTIFACTSTAGINGDIRECTORY:/root/artifacts" \
-            rpcs3/rpcs3-ci-jammy:2.2 \
+            rpcs3/rpcs3-ci-jammy:2.3 \
             /bin/sh -exc '
               /rpcs3/.ci/build-linux.sh
               cp /rpcs3/build/AppDir/usr/lib/libSDL3.so.0 /root/artifacts/libSDL3.so.0

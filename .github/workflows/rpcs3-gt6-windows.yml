@@ -14,7 +14,7 @@ defaults:
     shell: bash
 
 env:
-  RPCS3_COMMIT: eee3f0f7c285f2b8aa18fec278a2146c5cd874eb   # 0.0.43-20565, same as the Linux build
+  RPCS3_COMMIT: 0ca5eb0efe50ec4e8aa07892ab86d57842246eb4   # 0.0.43-20663, same as the Linux build
   BUILD_REPOSITORY_NAME: Mabec-games/rpcs3-gt6
   BUILD_SOURCEBRANCHNAME: gt6
   BUILD_PR_NUMBER: ""
@@ -28,9 +28,9 @@ jobs:
     env:
       COMPILER: msvc
       QT_VER_MAIN: '6'
-      QT_VER: '6.12.0'
+      QT_VER: '6.12.1'
       QT_VER_MSVC: 'msvc2022'
-      QT_DATE: '202609280346'
+      QT_DATE: '202611180427'
       LLVM_VER: '22.1.8'
       VULKAN_VER: '1.4.341.1'
       VULKAN_SDK_SHA: 'bcf2d75aa9556889ab974858666e20b3655b6055a0db704ccb47279ff33b5bfe'

@@ -10,7 +10,7 @@
 #   gh run download --repo <you>/rpcs3 -n "RPCS3 for Windows (MSVC)"
 set -euo pipefail
 B="$(cd "$(dirname "$0")/.." && pwd)"
-COMMIT="${RPCS3_COMMIT:-eee3f0f7c}"
+COMMIT="${RPCS3_COMMIT:-0ca5eb0ef}"
 DST="$B/rpcs3-ci"
 [ -d "$DST/.git" ] || git clone -q "$B/rpcs3-src" "$DST"
 cd "$DST"

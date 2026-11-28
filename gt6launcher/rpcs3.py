@@ -366,7 +366,9 @@ def installed_version(title_id: str) -> Optional[str]:
 
 
 # --------------------------------------------------------------------------- Windows: managed RPCS3
-# Same build as the Linux AppImage the launcher ships with (keeps behaviour identical across OSes).
+# Fallback only: STOCK upstream RPCS3 (no GT6 patches). The shipped Windows package bundles the
+# GT6-patched 0.0.43-20663 build instead. Keep this at 20565: stock 20663+ crashes GT6 at boot
+# (native-f16 LRP shader bug, fixed by emulator/gt6-patches/10).
 WINDOWS_PINNED = {
     "version": "0.0.43-20565",
     "url": "https://github.com/RPCS3/rpcs3-binaries-win/releases/download/"

@@ -117,7 +117,7 @@ APP="$WORK/pyi/GT6-Launcher"
 [[ -f "$APP/GT6-Launcher.exe" ]] || die "PyInstaller did not produce GT6-Launcher.exe."
 cp -a "$RPCS3_DIR" "$APP/rpcs3"
 if [[ -n "$PATCHED_RPCS3_DIR" && ! -f "$APP/rpcs3/GT6-PATCHED.txt" ]]; then
-    printf 'GT6-patched RPCS3 build %s from emulator/gt6-patches\n' '0.0.43-20565 (eee3f0f7)' \
+    printf 'GT6-patched RPCS3 build %s from emulator/gt6-patches\n' '0.0.43-20663 (0ca5eb0e)' \
         > "$APP/rpcs3/GT6-PATCHED.txt"
 fi
 

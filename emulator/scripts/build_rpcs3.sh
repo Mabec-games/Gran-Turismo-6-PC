@@ -8,7 +8,7 @@ SRC="$B/rpcs3-src"
 OBJ="$B/rpcs3-obj"
 APPDIR="$B/rpcs3-appdir"
 OUT="$B/out"
-RPCS3_COMMIT="${RPCS3_COMMIT:-eee3f0f7c}"
+RPCS3_COMMIT="${RPCS3_COMMIT:-0ca5eb0ef}"
 JOBS="${JOBS:-$(nproc)}"
 
 cd "$SRC"

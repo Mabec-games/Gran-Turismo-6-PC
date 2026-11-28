@@ -1,6 +1,6 @@
 # GT6-patched RPCS3
 
-Gran Turismo 6 PC ships RPCS3 built from upstream commit **`eee3f0f7c`** (0.0.43-20565) plus the
+Gran Turismo 6 PC ships RPCS3 built from upstream commit **`0ca5eb0ef`** (0.0.43-20663) plus the
 patches in [`gt6-patches/`](gt6-patches), applied in order:
 
 | Patch | Fixes |
@@ -13,6 +13,7 @@ patches in [`gt6-patches/`](gt6-patches), applied in order:
 | `06-usercmd-no-drain-stall` | **The ~1 s freezes in races** (RPCS3 #19549): pre-#19549 USER_COMMAND behaviour. `RPCS3_USERCMD_MODE=upstream` restores upstream behaviour for A/B tests. |
 | `07-gt6-theme-and-memlock` | Launcher colours for the in-game home menu, window icon from `GT6_WINDOW_ICON`, and memory locking stops after the first failure (no syscall + log spam when the system limit is low) |
 | `08-startup-dialog-steps` | Fixes a startup crash ("Range check failed", `gui_application.cpp`) when a startup dialog is confirmed twice, and skips the "Experimental Build Warning" when the GT6 launcher starts the emulator (`GT6_LAUNCHER`) |
+| `10-fp-lrp-native-half-cast` | **Boot crash on 0.0.43-20663+** (`Failed to compile fragment shader`, `cannot convert from vec4 to f16vec4`): the native-f16 shader path skipped the type cast for every `LRP`, so `LRP H0, R4, R10, R2` wrote a full-precision result into a half register. The cast is now skipped only when all three sources are half registers. |
 
 Patches 01–05 started from abowen's GT6 RPCS3 research and were rebased onto the current upstream.
 
@@ -20,7 +21,7 @@ Patches 01–05 started from abowen's GT6 RPCS3 research and were rebased onto t
 
 ```sh
 git clone https://github.com/RPCS3/rpcs3.git emulator/rpcs3-src
-git -C emulator/rpcs3-src checkout eee3f0f7c && git -C emulator/rpcs3-src submodule update --init --recursive
+git -C emulator/rpcs3-src checkout 0ca5eb0ef && git -C emulator/rpcs3-src submodule update --init --recursive
 emulator/scripts/build_rpcs3.sh       # -> emulator/out/rpcs3-gt6-x86_64.AppImage
 ```
 
