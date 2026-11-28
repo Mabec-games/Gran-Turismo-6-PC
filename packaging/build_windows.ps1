@@ -48,7 +48,18 @@ if ($env:GT6L_BUNDLE_RPCS3_DIR) {
     if (-not (Test-Path (Join-Path $EmuDir "rpcs3.exe"))) { throw "rpcs3.exe missing after extraction" }
 }
 $SdlDll = Get-ChildItem -Recurse $EmuDir -Filter SDL3.dll | Select-Object -First 1
-if (-not $SdlDll) { throw "SDL3.dll is missing from the bundled RPCS3 build; wheel calibration must use the emulator's SDL version." }
+if (-not $SdlDll) {
+    # RPCS3 for Windows links SDL statically, so fetch the same SDL release it is built with
+    # (3rdparty/libsdl-org/SDL at the pinned commit; keep in sync with build_windows_wine.sh).
+    $SdlVer = "3.4.20"
+    $SdlSha = "368BED8B24E44AD9EA372990814F2343FCFB9E468ABB7F8F4A3BC146C7304752"
+    $SdlZip = Join-Path $Work "sdl3.zip"
+    Invoke-WebRequest "https://github.com/libsdl-org/SDL/releases/download/release-$SdlVer/SDL3-$SdlVer-win32-x64.zip" -OutFile $SdlZip
+    if ((Get-FileHash $SdlZip -Algorithm SHA256).Hash -ne $SdlSha) { throw "SDL3 download checksum mismatch" }
+    & 7z x -y "-o$(Join-Path $Work 'sdl3')" $SdlZip | Out-Null
+    $SdlDll = Get-ChildItem -Recurse (Join-Path $Work "sdl3") -Filter SDL3.dll | Select-Object -First 1
+    if (-not $SdlDll) { throw "SDL3.dll not found in the SDL $SdlVer download" }
+}
 
 # 4. PyInstaller (windowed; CLI sub-commands still work from a console)
 $Args = @("--noconfirm", "--clean", "--onedir", "--windowed", "--name", "GT6-Launcher",

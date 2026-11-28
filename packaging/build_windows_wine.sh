@@ -10,7 +10,7 @@ PYTHON_EXE='C:\Python312\python.exe'
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/gt6-build-win-${UID}.XXXXXX")"
 DIST="$ROOT/dist"
 ZIP="$DIST/GT6-Launcher-win64.zip"
-SDL_VERSION="3.4.18"
+SDL_VERSION="3.4.20"   # same SDL as RPCS3 links statically at the pinned commit (keep in sync with build_windows.ps1)
 RPCS3_URL="https://github.com/RPCS3/rpcs3-binaries-win/releases/download/build-eee3f0f7c285f2b8aa18fec278a2146c5cd874eb/rpcs3-v0.0.43-20565-eee3f0f7_win64_msvc.7z"
 RPCS3_SHA256="FDEC321625C856DCF2D84EDA128F75F24A428230A233F1B2BF12C490882870E7"
 
